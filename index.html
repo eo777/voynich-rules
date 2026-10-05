@@ -1,0 +1,1870 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echo · Rule analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f7f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #8a8984; --line: #e4e2dc; --line2: #d3d1ca;
+  --secA: #2a78d6; --secM: #eb6834; --secB: #1baf7a;
+  --rgW: #2a78d6; --rgL: #eb6834; --rgLA: #774f12;--secAt: #1c5cab; --secMt: #b0461c; --secBt: #0c7a53; --secN: #8894a8; --m11: #52514e; --m1n: #4a3aa7; --mn1: #d55181; --mnn: #a3a19b; --tr1: #3b3a37; --tr1bg: rgba(82,81,78,.24); --trm: #4a3aa7; --trmbg: rgba(74,58,167,.13); --trn: #e34948; --trnbg: rgba(227,73,72,.13); --secL: #eda100; --secH: #e87ba4; --idl: #b3b0a8; --heat0: #f0efec; --heatA: #e34948; --heatB: #2a78d6;
+  --edgeE: #a3a19b; --edgeD: #5d5b57; --hi: #0b0b0b; --pill: #ffffff; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #8f8e87; --line: #2c2c2a; --line2: #3a3a37;
+    --secA: #3987e5; --secM: #d95926; --secB: #199e70;
+    --rgW: #3987e5; --rgL: #e0703f; --rgLA: #e1bd92;--secAt: #86b6ef; --secMt: #f0a07c; --secBt: #5fd0a3; --secN: #8f9bb0; --m11: #c3c2b7; --m1n: #9085e9; --mn1: #d55181; --mnn: #8f8e87; --tr1: #c3c2b7; --tr1bg: rgba(195,194,183,.16); --trm: #9085e9; --trmbg: rgba(144,133,233,.2); --trn: #e66767; --trnbg: rgba(230,103,103,.2); --secL: #c98500; --secH: #d55181; --idl: #5e5d58; --heat0: #383835; --heatA: #e66767; --heatB: #3987e5; --edgeE: #8f8e87; --edgeD: #c3c2b7; --hi: #ffffff; --pill: #232322; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #8f8e87; --line: #2c2c2a; --line2: #3a3a37;
+  --secA: #3987e5; --secM: #d95926; --secB: #199e70;
+  --rgW: #3987e5; --rgL: #e0703f; --rgLA: #e1bd92;--secAt: #86b6ef; --secMt: #f0a07c; --secBt: #5fd0a3; --secN: #8f9bb0; --m11: #c3c2b7; --m1n: #9085e9; --mn1: #d55181; --mnn: #8f8e87; --tr1: #c3c2b7; --tr1bg: rgba(195,194,183,.16); --trm: #9085e9; --trmbg: rgba(144,133,233,.2); --trn: #e66767; --trnbg: rgba(230,103,103,.2); --secL: #c98500; --secH: #d55181; --idl: #5e5d58; --heat0: #383835; --heatA: #e66767; --heatB: #3987e5; --edgeE: #8f8e87; --edgeD: #c3c2b7; --hi: #ffffff; --pill: #232322; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.45 Inter, system-ui, sans-serif; }
+.app { display: flex; flex-direction: column; height: 100vh; }
+.app > .main, .app > .secPage, .app > .trPage, .app > .rulesPage { flex: 1; min-height: 0; }
+.gbar { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; padding: 8px 24px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.gbar .theme { margin-left: auto; }
+.chips .chip { background: var(--line); border-color: var(--line2); color: var(--ink); }
+.chips .chip.off { background: transparent; color: var(--muted); opacity: 1; border-style: dashed; }
+.chip .offtag { display: none; }
+.chip.off .offtag { display: inline; margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--ink2); text-transform: uppercase; }
+header { padding: 18px 24px 8px; }
+h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; letter-spacing: -.01em; }
+.sub { color: var(--ink2); max-width: 1100px; }
+.controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 10px 24px 12px; border-bottom: 1px solid var(--line); }
+.ctl { display: flex; align-items: center; gap: 8px; color: var(--ink2); }
+.ctl label { font-weight: 500; color: var(--ink); }
+select, input[type=search] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line2); border-radius: 6px; padding: 4px 8px; }
+input[type=range] { accent-color: var(--ink2); width: 120px; }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; border: 0; background: var(--surface); color: var(--ink2); padding: 4px 10px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line2); }
+.seg button.on { background: var(--ink); color: var(--surface); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 12px/1 'JetBrains Mono', monospace; border: 1px solid var(--line2); background: var(--surface); color: var(--ink2); border-radius: 999px; padding: 5px 9px; cursor: pointer; user-select: none; }
+.chip.off { opacity: .35; text-decoration: line-through; }
+.chip:hover { border-color: var(--ink2); }
+.main { display: grid; grid-template-columns: 1fr 520px; min-height: 0; }
+.blk { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.bh { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; margin-bottom: 8px; }
+.seg.small button { padding: 2px 7px; font-size: 11px; }
+.segline { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.kv { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
+.kv b { font-variant-numeric: tabular-nums; }
+.kv .muted { font-size: 11px; }
+.setrow { display: grid; grid-template-columns: 26px 1fr 92px; align-items: center; gap: 8px; margin: 3px 0; }
+.setlab { font: 500 11px 'JetBrains Mono', monospace; color: var(--ink2); }
+.rng { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ink); text-align: right; }
+.rbar { position: relative; height: 14px; }
+.rbar.thin { height: 10px; margin: 3px 0 2px; }
+.rbar .cap { position: absolute; left: 0; top: 0; bottom: 0; border: 1px solid var(--muted); border-radius: 2px; background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line) 3px 4px); }
+.rbar .lo, .rbar .hi { position: absolute; top: 2px; bottom: 2px; border-radius: 1px; }
+.rbar.thin .lo, .rbar.thin .hi { top: 1px; bottom: 1px; }
+.rbar .lo { left: 0; }
+.rbar .hi { opacity: .35; }
+.routes { display: flex; flex-direction: column; gap: 6px; }
+.route .rt { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.route .rn { font-size: 11px; }
+.code { font-size: 10px; border: 1px solid var(--line2); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+.chip b { color: var(--ink); font-weight: 600; }
+.stage { position: relative; overflow: hidden; background: var(--surface); }
+svg#net { width: 100%; height: 100%; cursor: grab; display: block; }
+svg#net.drag { cursor: grabbing; }
+.side { border-left: 1px solid var(--line); overflow: auto; padding: 16px 18px; background: var(--bg); }
+.side h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink2); }
+.legend-glyph { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center; margin-bottom: 18px; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; vertical-align: -1px; margin-right: 6px; }
+.edge-key { display: grid; grid-template-columns: 44px 1fr; gap: 6px 10px; align-items: center; margin: 6px 0 18px; color: var(--ink2); }
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; box-shadow: var(--shadow); margin-bottom: 16px; }
+.detail .w { font: 600 18px 'JetBrains Mono', monospace; margin-bottom: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+td, th { padding: 3px 4px; text-align: right; }
+th { font-weight: 500; color: var(--muted); font-size: 11px; }
+td:first-child, th:first-child { text-align: left; }
+.edges-list { margin-top: 10px; font-size: 12px; }
+.edges-list div { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px solid var(--line); }
+.edges-list .moved { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.muted { color: var(--muted); }
+.note { color: var(--ink2); font-size: 12px; }
+.tip { position: absolute; pointer-events: none; background: var(--pill); border: 1px solid var(--line2); border-radius: 8px; padding: 10px 12px; box-shadow: var(--shadow); font-size: 12px; min-width: 220px; display: none; z-index: 5; }
+.tip .w { font: 600 14px 'JetBrains Mono', monospace; margin-bottom: 4px; }
+.zoom { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.cnote { position: absolute; left: 12px; bottom: 40px; font-size: 11px; color: var(--ink2); background: color-mix(in srgb, var(--surface) 85%, transparent); padding: 2px 6px; border-radius: 4px; }
+.zoom button { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line2); background: var(--pill); color: var(--ink); font-size: 16px; cursor: pointer; box-shadow: var(--shadow); }
+.hint { position: absolute; left: 12px; bottom: 10px; color: var(--muted); font-size: 11px; }
+/* svg */
+  .nlabel { font: 500 12.5px 'JetBrains Mono', monospace; fill: var(--ink); }
+.nsub { font: 500 10.5px 'JetBrains Mono', monospace; fill: var(--muted); }
+.bnum { font: 600 11px 'JetBrains Mono', monospace; }
+.flabel { font: 600 13.5px Inter, system-ui, sans-serif; fill: var(--ink); }
+.base { stroke: var(--line2); stroke-width: 1; }
+.edge { fill: none; stroke-width: 1.4; }
+.edge.m11 { stroke: var(--m11); stroke-width: 2.4; }
+.edge.m1n { stroke: var(--m1n); stroke-width: 1.6; }
+.edge.mn1 { stroke: var(--mn1); stroke-width: 1.6; }
+.edge.mnn { stroke: var(--mnn); stroke-width: 1.4; stroke-dasharray: 2 3; stroke-linecap: round; }
+.badge rect { stroke: none; }
+.badge text { font: 700 11.5px 'JetBrains Mono', monospace; fill: #ffffff; }
+.tabs { display: flex; gap: 2px; margin-top: 12px; }
+.tab { font: 500 13px Inter, sans-serif; border: 0; background: transparent; color: var(--ink2); padding: 6px 12px; border-bottom: 2px solid transparent; cursor: pointer; }
+.tab.on { color: var(--ink); border-bottom-color: var(--ink); }
+.status { position: absolute; left: 0; right: 0; bottom: 0; padding: 7px 12px; font-size: 12px; background: color-mix(in srgb, var(--surface) 92%, transparent); border-top: 1px solid var(--line); color: var(--ink2); display: flex; gap: 14px; align-items: center; min-height: 32px; }
+.status .w { font: 600 13px 'JetBrains Mono', monospace; color: var(--ink); }
+.status .sw { margin-right: 4px; }
+.status .enc { margin-left: auto; color: var(--ink2); font-weight: 600; white-space: nowrap; }
+.status .htag { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line2); border-radius: 4px; padding: 0 5px; }
+.status .htag.pin { color: var(--ink); border-color: var(--ink2); }
+.rulesPage { overflow: auto; padding: 20px 24px 40px; }
+.rulesPage .intro { max-width: 980px; color: var(--ink2); margin-bottom: 18px; }
+.rbar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 14px; }
+.rbar .rhint { margin-left: auto; font-size: 11.5px; }
+.rtable { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 20px; font-size: 12.5px; }
+.rtable th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line2); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.rtable td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); cursor: pointer; vertical-align: top; }
+.rtable td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.rtable td.kev { font-size: 12px; }
+.rtable tr:hover td { background: var(--bg); }
+.rtable tr.dim td { opacity: .35; }
+.rtable .chip { cursor: pointer; }
+.rex table td, .rex table th { white-space: nowrap; }
+.rex table { width: 100%; }
+.rcols .rcard { break-inside: avoid; margin: 0 0 16px; display: block; }
+.rcard.flash { box-shadow: 0 0 0 3px var(--ink2); }
+.rtop { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 4px; }
+.code.big { font: 700 15px 'JetBrains Mono', monospace; padding: 3px 8px; border-radius: 6px; margin: 0; }
+.rname { font-weight: 600; font-size: 14px; }
+.rtop .tags { margin: 2px 0 0 auto; }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0; font-size: 12.5px; }
+dl.kv dt { color: var(--ink2); }
+dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+details.rex > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin: 12px 0 4px; }
+.rcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
+.rcard h3 { margin: 0; font-size: 15px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rcard h3 .code { font: 600 13px 'JetBrains Mono', monospace; padding: 1px 6px; margin: 0; }
+.rcard .pat { font: 500 14px 'JetBrains Mono', monospace; margin: 2px 0 6px; color: var(--ink2); }
+.rcard .tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.rcard .tag { font-size: 11px; border-radius: 999px; padding: 2px 8px; background: var(--bg); border: 1px solid var(--line2); color: var(--ink2); }
+.rcard h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 0 4px; font-weight: 600; }
+.rcard ul { margin: 0; padding-left: 18px; }
+.rcard li { margin: 3px 0; }
+.rcard table td { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.gates { }
+.gloss { position: absolute; right: 24px; top: 96px; z-index: 20; width: 520px; max-height: 70vh; overflow: auto; background: var(--surface); border: 1px solid var(--line2); border-radius: 10px; box-shadow: var(--shadow); padding: 14px 16px; }
+.gloss .gh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.gloss dl.kv { gap: 6px 14px; }
+.gloss dt { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.app { position: relative; }
+.jump { display: flex; gap: 12px; font-size: 12px; margin: 0 0 6px; }
+.jump a { color: var(--ink2); cursor: pointer; text-decoration: underline dotted; }
+details.novd > summary { cursor: pointer; }
+.novgrid { display: grid; grid-template-columns: auto auto 1fr; gap: 6px 10px; align-items: center; margin-top: 8px; font-size: 12px; }
+.srow2 { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; flex-basis: 100%; }
+.stat2 b { font-size: 15px; margin: 0 2px 0 4px; }
+.ncwrap { flex-basis: 100%; }
+.nctab td, .nctab th { text-align: left !important; }
+.nctab td.n, .nctab th.n, .pstat td.n { text-align: right !important; }
+.nctab td.wrap { white-space: normal; }
+.pstat { width: auto; font-size: 12px; }
+.pstat td { padding: 3px 10px 3px 0; text-align: left; }
+.nctab { width: auto; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+.nctab th { text-align: left; font-weight: 600; color: var(--ink2); font-size: 11px; padding: 3px 12px 3px 0; }
+.nctab td { padding: 3px 12px 3px 0; font-variant-numeric: tabular-nums; }
+.rlist, .rtable, .rbar, .rfoot, .rnote { max-width: 1500px; margin-left: auto; margin-right: auto; }
+.rlist .rcard { width: auto; max-width: none; }
+table.evt td:not(.n), table.ext td:not(.n), table.evt th:not(.n), table.ext th:not(.n):not(.grp) { text-align: left; }
+.rlist .rcard { margin: 0 0 16px; scroll-margin-top: 12px; }
+.rbody { display: grid; grid-template-columns: 2fr 3fr; gap: 8px 32px; }
+@media (max-width: 1100px) { .rbody { grid-template-columns: 1fr; } }
+table.ext th.swl div { font-size: 10px; font-weight: 500; color: var(--ink2); white-space: nowrap; }
+table.evt, table.ext { border-collapse: collapse; font-size: 12px; width: 100%; }
+table.evt td, table.evt th { font-family: Inter, system-ui, sans-serif !important; white-space: nowrap; }
+table.evt td:last-child { white-space: normal; }
+table.evt th, table.ext th { font-size: 11px; color: var(--ink2); font-weight: 600; text-align: left; padding: 3px 8px 3px 0; border-bottom: 1px solid var(--line2); }
+table.evt td, table.ext td { padding: 4px 14px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.evt td.na { color: var(--line2); text-align: center !important; }
+table.evt td, table.evt th { padding-right: 18px !important; }
+table.evt th.n + th:not(.n), table.evt td.n + td:not(.n) { padding-left: 14px; border-left: 1px solid var(--line); }
+table.evt td.v { font-weight: 600; }
+table.evt .n, table.ext .n { text-align: right; font-variant-numeric: tabular-nums; }
+table.ext th.grp { text-align: center; border-bottom: 1px solid var(--line); }
+table.ext td.n { font-family: 'JetBrains Mono', monospace; }
+.rtable th.n, .rtable td.n { text-align: right; }
+.rfoot { margin-top: 18px; font-size: 11.5px; }
+.rnote { font-size: 12px; margin-bottom: 10px; }
+.sw2 { position: relative; display: inline-block; width: 30px; height: 17px; vertical-align: middle; cursor: pointer; }
+.sw2 input { opacity: 0; width: 0; height: 0; }
+.sw2 span { position: absolute; inset: 0; background: var(--line2); border-radius: 17px; transition: background .15s; }
+.sw2 span::before { content: ''; position: absolute; width: 13px; height: 13px; left: 2px; top: 2px; background: var(--surface); border-radius: 50%; transition: transform .15s; }
+.sw2 input:checked + span { background: var(--ink2); }
+.sw2 input:checked + span::before { transform: translateX(13px); }
+.skey { font-size: 13px !important; color: var(--ink) !important; position: absolute; left: 16px; right: 16px; bottom: 5px; padding-top: 5px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 11px; color: var(--ink2); align-items: center; }
+.skey span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.skey .ln { display: inline-block; width: 26px; border-radius: 2px; }
+.skey .ln.dash { height: 0; border-top: 3px dashed; }
+.skey .ln.dot { height: 0; border-top: 1.5px dotted; }
+.subh { font-size: 11px; color: var(--muted); padding-top: 6px; text-align: left !important; }
+.collapsed { font-size: 12px; margin: 0 0 6px; color: var(--ink2); }
+.at { display: grid; gap: 6px 10px; align-items: center; font-size: 11.5px; }
+.at .hd { font-weight: 600; font-size: 11px; color: var(--ink2); }
+.at .sl { display: flex; align-items: center; gap: 4px; }
+.at .c { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.at .c .rbar { flex: 1; min-width: 24px; }
+.at .c .v { display: inline-block; width: 54px; font-size: 10.5px; margin: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pgline { flex-basis: 100%; }
+.rgsum { font-size: 12.5px; margin: 2px 0 8px; line-height: 1.6; }
+.rgwarn { color: var(--trn); font-size: 11.5px; }
+.rgbars { display: grid; gap: 3px; margin-bottom: 10px; }
+.rgrow { display: grid; grid-template-columns: 150px 1fr 38px; align-items: center; gap: 8px; font-size: 12px; }
+.rgrow .rgb { height: 10px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.rgrow .rgb span { display: block; height: 100%; background: var(--ink2); border-radius: 2px; }
+.rgrow.top .rgb span { background: var(--ink); }
+.rgrow.top .rgl, .rgrow.top .rgv { font-weight: 700; }
+.rgrow .rgv { text-align: right; font-variant-numeric: tabular-nums; }
+.rgown { font-size: 10px; border: 1px solid var(--line2); border-radius: 4px; padding: 0 4px; color: var(--ink2); margin-left: 4px; }
+.rgmh { font-size: 11.5px; font-weight: 600; margin: 6px 0 4px; }
+.rgmat { border-collapse: separate; border-spacing: 2px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.rgmat th { font-weight: 500; color: var(--ink2); font-size: 10.5px; padding: 0 2px; }
+.rgmat th.rh { text-align: right; padding-right: 6px; white-space: nowrap; }
+.rgmat td { width: 34px; height: 20px; text-align: center; border-radius: 3px; cursor: default; color: var(--ink); }
+.rgmat td.dg { background: transparent; }
+.rgmat td.on { box-shadow: 0 0 0 2px var(--ink); }
+.rgmat td.mir { box-shadow: 0 0 0 1.5px var(--ink2); outline: 1px dashed var(--ink2); outline-offset: 2px; }
+.rginfo { font-size: 12px; min-height: 36px; margin: 6px 0; line-height: 1.5; }
+.rgfoot { font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+.pgchips { display: inline-flex; gap: 8px; margin-left: 14px; vertical-align: middle; }
+.nctab .tr { font: 500 12px 'JetBrains Mono', monospace; border-left: 3px solid var(--trn); padding-left: 6px; white-space: nowrap; }
+.nctab td.wds { white-space: nowrap; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; flex-basis: 100%; }
+.stat { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.stat b { font-size: 16px; }
+.stat small { flex-basis: 100%; font-size: 11px; }
+.nclasses { flex-basis: 100%; font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.trk sup { font-size: 10px; margin-left: 2px; font-weight: 700; }
+details.key { margin: 0 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+details.key > summary, details.grp > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--ink2); text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 8px; }
+details.grp { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 10px; }
+.cap2 { font-size: 11.5px; color: var(--ink2); margin-bottom: 8px; }
+.am .c .v { display: block; font-size: 11px; margin-top: 2px; }
+.am .c.role { font-size: 11.5px; }
+.am .hd { white-space: normal; line-height: 1.2; }
+.akey { display: grid; grid-template-columns: 16px 1fr; align-items: center; gap: 4px 8px; font-size: 11px; color: var(--ink2); margin: 8px 0 2px; }
+.akey .k.hatch { border: 1px solid var(--muted); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line2) 3px 4px); }
+.akey .k { display: inline-block; width: 14px; height: 9px; border-radius: 2px; }
+.akey .k:first-child { margin-left: 0; }
+.akey .k.solid { background: var(--ink2); }
+.akey .k.light { background: var(--ink2); opacity: .35; }
+.akey .k.outline { border: 1px solid var(--muted); }
+.cand2 td, .cand2 th { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cand2 th { white-space: normal; vertical-align: bottom; }
+.cand2 { font-size: 11.5px; }
+.cand2 td, .cand2 th { padding-left: 4px; padding-right: 4px; }
+.sbar { display: inline-block; width: 42px; height: 6px; background: var(--line); border-radius: 2px; margin-right: 6px; vertical-align: middle; overflow: hidden; }
+.sbar div { height: 100%; background: var(--ink2); }
+details.how { margin: 12px 0 4px; font-size: 12px; color: var(--ink2); }
+details.how summary { cursor: pointer; font-weight: 600; color: var(--ink2); }
+details.how ul { margin: 6px 0 0; padding-left: 18px; }
+details.how li { margin: 3px 0; }
+.ckey { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--ink2); margin-bottom: 6px; }
+.whead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; margin: -2px 0 10px; }
+.dh { font-weight: 600; font-size: 12px; margin: 16px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.dh .muted { font-weight: 400; }
+.hw { display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0 6px; }
+.hc { font: 600 17px 'JetBrains Mono', monospace; padding: 5px 7px; border-radius: 4px; color: var(--ink); cursor: pointer; border: 2px solid transparent; }
+.hc.strong { color: #ffffff; }
+.mini .qm { fill: var(--muted); font-weight: 400; }
+.hc.qset { color: var(--muted); border: 2px dashed var(--line2); background: transparent; cursor: default; }
+.hc.end { font-size: 12px; color: var(--muted); padding: 7px 6px; }
+.hc.pass { border-color: var(--ink); }
+.hc.on { outline: 2px solid var(--ink2); outline-offset: 1px; }
+.hkey { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--ink2); margin-bottom: 6px; }
+.hkey { gap: 4px 12px; }
+.hkey .ki { white-space: nowrap; display: inline-flex; align-items: center; }
+.hkey .ring { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--ink); border-radius: 3px; margin-right: 6px; }
+.hwInfo { min-height: 40px; }
+.wsel { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 10px; }
+.wsel button { font: 500 12px 'JetBrains Mono', monospace; border: 1px solid var(--line2); background: var(--surface); color: var(--ink2); border-radius: 5px; padding: 2px 8px; cursor: pointer; }
+.wsel button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.wsel button i { font-style: normal; font-family: Inter, sans-serif; font-size: 10.5px; opacity: .75; margin-left: 5px; }
+.wsub { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink2); margin: 12px 0 6px; }
+.gdiv { display: grid; grid-template-columns: 1fr 1fr; height: 16px; margin: 6px 0 3px; border-left: 0; }
+.gside { display: flex; background: var(--line); }
+.gside.l { justify-content: flex-end; border-right: 2px solid var(--ink); border-radius: 3px 0 0 3px; }
+.gside.r { border-radius: 0 3px 3px 0; }
+.gside span { display: block; height: 100%; }
+.gdl { display: flex; justify-content: space-between; font-size: 12px; }
+.gverd { font-size: 12px; margin: 4px 0 6px; }
+details.gx > summary { cursor: pointer; font-size: 12px; font-weight: 600; margin: 4px 0; }
+.gtab { border-collapse: collapse; font-size: 11px; width: 100%; margin: 4px 0; }
+.gtabw { overflow-x: auto; }
+.gtab th.wrap { white-space: normal; min-width: 52px; }
+.gtab th { font-weight: 600; font-size: 10.5px; color: var(--ink2); padding: 3px 4px; border-bottom: 1px solid var(--line2); text-align: right; white-space: nowrap; }
+.gtab td { padding: 2px 4px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gtab tr.hl td { background: var(--line); }
+.g2bar { vertical-align: middle; margin-right: 4px; }
+.passrow td { font-weight: 700; }
+.hwInfo td { white-space: nowrap; font-size: 11.5px; }
+.passrow td:first-child::before { content: ''; display: inline-block; width: 9px; height: 9px; border: 2px solid var(--ink); border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+svg.mini { display: block; margin-top: 4px; }
+.mnode { cursor: pointer; }
+.mnode .hit { fill: transparent; }
+.mnode:hover .hit { fill: var(--line); }
+.mnode.me .hit { fill: none; stroke: var(--ink); stroke-width: 1.3; }
+.app.secMode .main, .app.rulesMode .secPage { display: none; }
+.app.secMode #midCtl { display: none; }
+.app.trMode .main, .app.trMode .secPage { display: none; }
+.app.trMode #tabCtl { display: none; }
+.trPage { display: grid; grid-template-columns: 1fr 520px; min-height: 0; }
+.trPage[hidden] { display: none; }
+.trMain { overflow: auto; background: var(--surface); padding: 0 0 40px; }
+.trBar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.trBar select { max-width: 360px; }
+.trStep { font: inherit; font-size: 15px; line-height: 1; color: var(--ink); background: var(--surface); border: 1px solid var(--line2); border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+.trStep:hover:not(:disabled) { border-color: var(--ink2); }
+.trStep:disabled { opacity: .35; cursor: default; }
+.trSum { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 12px 20px 4px; color: var(--ink2); font-size: 12px; align-items: center; }
+.trSum b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.trText { padding: 6px 20px; }
+.trLine { display: grid; grid-template-columns: 38px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.trLine .ln { font: 500 11px 'JetBrains Mono', monospace; color: var(--muted); padding-top: 3px; }
+.trWords { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-start; }
+.tw { display: flex; flex-direction: column; gap: 2px; cursor: pointer; border-radius: 5px; padding: 2px 4px; min-width: 28px; }
+.tw:hover, .tw.hl { outline: 1px solid var(--line2); }
+.tw.sel { outline: 1.5px solid var(--ink); }
+.tw .src { font: 400 14.5px 'JetBrains Mono', monospace; color: var(--ink2); }
+.tw .out { font: 500 15.5px 'JetBrains Mono', monospace; color: var(--ink); padding: 0 3px; border-radius: 3px; }
+.tw .alt { font: 400 13px 'JetBrains Mono', monospace; color: var(--ink2); padding: 0 3px; white-space: nowrap; }
+.tw .alt i { font-style: normal; color: var(--muted); font-size: 10.5px; margin-left: 4px; }
+.trk { font: 500 12px 'JetBrains Mono', monospace; padding: 0 4px; border-radius: 3px; white-space: nowrap; }
+.kept { color: var(--ink2); box-shadow: none; background: transparent; border-bottom: 1px dotted var(--line2); }
+.tw .out sup { font-size: 10.5px; margin-left: 2px; color: var(--ink2); font-weight: 700; }
+.tw .out.nomatch sup { margin-left: 3px; }
+.tw .out.nomatch { font-size: 13px; font-style: italic; color: var(--trn); background: var(--trnbg); box-shadow: none; padding: 0 4px; border-radius: 3px; }
+.kept.alts::after { content: '+alt'; color: var(--trm); margin-left: 4px; font-size: 9.5px; font-weight: 700; vertical-align: super; }
+.one { background: var(--tr1bg); box-shadow: none; color: var(--ink); }
+.multi { background: var(--trmbg); box-shadow: inset 0 -2.5px 0 var(--trm); color: var(--ink); }
+.novel { background: var(--trnbg); box-shadow: inset 0 -2px 0 var(--trn); color: var(--ink); }
+.trk.one, .trk.multi, .trk.kept, .trk.novel, .trk.form { display: inline-block; }
+.form { background: transparent; outline: 1.5px dashed var(--trm); outline-offset: -1.5px; color: var(--ink); font-style: italic; }
+.trk.kept { padding: 0 4px; }
+.cand { width: 100%; }
+.cand td { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.cand .bar { height: 6px; border-radius: 2px; background: var(--ink2); }
+.secPage { display: grid; column-gap: 14px; grid-template-columns: 1fr 520px; grid-template-rows: 1fr auto; min-height: 0; }
+.secPage[hidden] { display: none; }
+.secMain { overflow: auto; background: var(--surface); position: relative; }
+.secHead { position: sticky; top: 0; z-index: 3; height: 92px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.colh { position: absolute; top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.colh .t { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.colh .n { font-size: 11px; color: var(--muted); }
+.colh button { font: inherit; font-size: 12px; min-width: 22px; min-height: 22px; border: 1px solid var(--line2); background: var(--pill); color: var(--ink2); border-radius: 5px; padding: 0 5px; cursor: pointer; line-height: 18px; }
+.colh button:hover { color: var(--ink); border-color: var(--ink2); }
+.colh select { font-size: 12px; padding: 2px 4px; }
+#secSvg { display: block; }
+.secPage .status { position: static; grid-column: 1 / -1; }
+.scell text.wl { font: 500 11.5px 'JetBrains Mono', monospace; fill: var(--ink); }
+.scell:not([data-col="0"]) text.wl { opacity: .4; }
+.sdim .scell.on text.wl, .scell.sel text.wl, .scell.hov text.wl { opacity: 1; }
+.scell text.ct { font: 400 10px Inter, sans-serif; fill: var(--muted); }
+.scell .hit { fill: transparent; cursor: pointer; }
+.scell.sel .hit, .scell.hov .hit { stroke: var(--ink); stroke-width: 1.2; }
+.scell.sel text.wl, .scell.hov text.wl { font-weight: 700; }
+.band.sel { fill: var(--line); }
+.band.hov { fill: var(--line); opacity: .5; }
+.slink { fill: none; opacity: .55; }
+.slink.id { opacity: .3; }
+.slink.id.on { opacity: .5; }
+.slink.two { opacity: .5; }
+.slink.zero { opacity: .7; }
+.sdim .scell:not(.on) rect:not(.hit) { opacity: .42; }
+.sdim .scell:not(.on) text { opacity: .7; }
+.sdim .slink:not(.on) { opacity: .03; }
+.slink.on { opacity: .9; }
+.sfam { font: 600 11.5px 'JetBrains Mono', monospace; fill: var(--ink2); }
+.am { display: grid; grid-template-columns: 30px repeat(4, minmax(0, 1fr)); gap: 6px 8px; align-items: center; font-size: 11px; }
+.am .hd { font-weight: 600; font-size: 11px; color: var(--ink2); }
+.am .rl { font: 500 11px 'JetBrains Mono', monospace; color: var(--ink2); }
+.am .c { min-width: 0; }
+.am .c .rbar { height: 10px; }
+.am .c .v { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.am .pw { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; border-top: 1px solid var(--line); padding-top: 5px; font-size: 12px; }
+.am .dash { color: var(--muted); }
+.app.rulesMode #tabCtl, .app.rulesMode .main { display: none; }
+.app.rulesMode #dl, .app.trMode #dl { display: none; }
+.edge-key div { font-size: 12px; }
+.dim .node:not(.on) > rect:not(.hit), .dim .node:not(.on) > line, .dim .node:not(.on) .badge { opacity: .42; }
+.dim .node:not(.on) text { opacity: .7; }
+.dim .edgeg:not(.on) .pill { display: none; }
+.dim .edgeg:not(.on) { opacity: .24; }
+.dim .fam:not(.on) { opacity: .55; }
+.edgeg.on .edge { stroke-width: 3; }
+.edgeg.on .edge.m11 { stroke-width: 3.6; }
+.pill rect { fill: var(--pill); stroke: var(--line2); }
+.pill text { font: 500 11px 'JetBrains Mono', monospace; fill: var(--ink); }
+.node .hit { fill: transparent; cursor: pointer; }
+.node.sel .hit { stroke: var(--hi); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.theme { margin-left: auto; }
+@media (max-width: 900px) { .main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .side { border-left: 0; border-top: 1px solid var(--line); max-height: 40vh; } }
+</style>
+<link rel="stylesheet" href="workbench.css?v=f6719e732d">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brandline"><h1>Echo <span>/ Rule analyzer</span></h1><span class="research-tag">Voynich dialect research · work in progress<span id="releaseTag"></span></span></div>
+    <div class="sub">Understand the rules, investigate what remains, and explore Herbal A ↔ Herbal B.</div>
+    <nav class="tabs" aria-label="Analyzer views"><button class="tab" data-tab="residuals">Residuals</button><button class="tab" data-tab="distribution">Distribution</button><button class="tab" data-tab="contexts">Words &amp; contexts</button><button class="tab" data-tab="lab">Rule lab</button><button class="tab on" data-tab="net">Network</button><button class="tab" data-tab="sections">Sections</button><button class="tab" data-tab="stages">Stages</button><button class="tab" data-tab="translate">Translate</button><button class="tab" data-tab="rules">Rule manager</button></nav>
+  </header>
+  <div class="gbar">
+    <button class="wb-button" id="manageRules">Manage rules</button>
+    <div class="ctl" id="repCtl" title="Count a word repeated immediately on the same line (chol chol) once, in every population. Saved LC1 tables and Words &amp; contexts are unchanged."><label for="repeats">Repeats</label><select id="repeats"><option value="keep">Count every token</option><option value="collapse">Collapse X X → X</option></select></div>
+    <div class="ctl theme"><div class="seg" id="themeSeg"><button data-v="auto" class="on">auto</button><button data-v="light">light</button><button data-v="dark">dark</button></div>
+      <button class="chip" id="glossBtn" title="Definitions of the terms used in this app">? glossary</button>
+      <button class="chip" id="dl" title="Save the network or sections drawing as an SVG file">save view as SVG</button></div>
+    <div class="gloss" id="gloss" hidden></div>
+  </div>
+  <div class="controls" id="tabCtl">
+    <div class="ctl" id="midCtl"><label>Middle section</label><select id="mid"></select></div>
+    <div class="ctl" id="cmpCtl" title="Which comparison the orange (source left) and red (target missing) bar segments show"><label for="cmp">Mass bars</label><select id="cmp"></select></div>
+    <div class="ctl" id="minCtl" title="Words with fewer tokens, summed over the sections charted in this tab, are hidden"><label>Min. tokens</label>
+      <input id="minTok" type="range" min="1" max="40" step="1" value="6"><span id="minTokV" class="mono">6</span>
+      <span class="muted" id="minHint">summed over the charted sections</span></div>
+    <div class="ctl" id="scaleCtl"><label>Bar scale</label>
+      <div class="seg" id="scale"><button data-v="lin" class="on">linear</button><button data-v="sqrt">sqrt</button></div></div>
+    <div class="ctl" id="findCtl"><label for="find">Find word</label><input id="find" type="search" placeholder="e.g. chor" size="12" list="graphWords"><datalist id="graphWords"></datalist><label for="findMode" class="sr-only">Search scope</label><select id="findMode"><option value="word">Only this word</option><option value="direct">Direct connections</option><option value="family">Whole connected component</option></select><button class="wb-button" id="clearFind">Clear</button><button class="wb-button" id="inspectConnections">Inspect connections</button><button class="wb-button" id="expandDiagram" aria-pressed="false">Expand diagram</button></div>
+  </div>
+  <section class="legacy-intro" id="legacyIntro" hidden></section>
+  <div class="main">
+    <div class="stage" id="stage">
+      <svg id="net" xmlns="http://www.w3.org/2000/svg"><g id="vp"></g></svg>
+      <div class="status" id="status"></div>
+      <div class="zoom"><button id="zin">+</button><button id="zout">&minus;</button><button id="zfit" title="fit">&#8634;</button></div>
+    </div>
+    <aside class="side">
+      <div id="detail"></div>
+      <details class="key" open><summary>Key</summary>
+      <h2>Node</h2>
+      <div class="legend-glyph">
+        <svg width="70" height="64" id="glyphKey"></svg>
+        <div id="secKey"></div>
+      </div>
+      <h2>Lines</h2>
+      <div class="edge-key" id="edgeKey"></div>
+      </details>
+      <details class="how"><summary>How this works</summary><ul>
+        <li>Left: form without the added e / d. Each column is one rule step.</li>
+        <li>Line label: the letters that differ.</li>
+        <li>&times;N: partners on that side, among the words shown.</li>
+        <li>Rules: frozen JA1 functions, ed licence and Davis gates applied. Zattera is not a gate.</li>
+        <li>Hollow node: chain middle that no section writes.</li>
+        <li>Rates per 10k tokens. Reused data. A line is a candidate pairing, not evidence.</li>
+      </ul></details>
+    </aside>
+  </div>
+  <div class="secPage" id="secPage" hidden>
+    <div class="secMain" id="secMain"><div class="secHead" id="secHead"></div><svg id="secSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <aside class="side">
+      <div id="detail2"></div>
+      <details class="key" open><summary>Key</summary>
+      <div class="muted" style="margin-bottom:6px">Bars and numbers = rates per 10k. Orange is source left; red is target missing.</div>
+      <h2>Lines between columns</h2>
+      <div class="edge-key" id="edgeKey2"></div>
+      </details>
+      <details class="how"><summary>How this works</summary><ul>
+        <li>Bars and numbers: rates per 10k in that section.</li>
+        <li>Grey band: rate kept in both sections.</li>
+        <li>Colored line: mass assigned in one joint maximum-flow allocation.</li>
+        <li>Long dashes: a two-step rule within one gap.</li>
+        <li>Hairline: an available pairing assigned zero in this allocation.</li>
+        <li>Every gap is a separate comparison. Routes can vary between equally good allocations; this is not the fitted LC1 policy.</li>
+        <li>&#9664; &#9654; reorder, &times; remove, menu adds a section.</li>
+      </ul></details>
+    </aside>
+    <div class="status" id="status2"></div>
+  </div>
+  <div class="trPage" id="trPage" hidden>
+    <div class="trMain">
+      <div class="trToolbar">
+      <div class="trBar">
+        <div class="ctl"><label for="trFolio">Page</label><button class="trStep" id="trPrev" aria-label="Previous page" title="Previous page (←)">‹</button><select id="trFolio"></select><button class="trStep" id="trNext" aria-label="Next page" title="Next page (→)">›</button></div>
+        <div class="ctl"><label for="trFrom">From</label><select id="trFrom"></select><label for="trTo">To</label><select id="trTo"></select></div>
+        <div class="seg" id="trView" aria-label="Translation alternatives"><button data-v="best" class="on" title="Most likely candidate">Best</button><button data-v="all" title="All candidate forms">All</button></div>
+      </div>
+      <div class="trBar trInsights">
+        <div class="ctl"><label for="trOverlay">Overlay</label><select id="trOverlay"><option value="none">None</option><option value="source">Source frequency</option><option value="target">Target frequency</option><option value="balance">Frequency ratio</option><option value="regime">Regime likeness</option><option value="pair">Pairwise likeness</option><option value="glyph">Glyph G²</option></select></div>
+        <div class="ctl"><label for="trMissing">Gaps</label><select id="trMissing"><option value="off">Off</option><option value="novelty">Glyph novelty</option><option value="capacity">Enabled-rule residual</option><option value="saved">Saved LC1 residual</option></select></div>
+        <details class="trOptions"><summary>Options &amp; help</summary><div class="trOptionsBody">
+          <h3>Glyph novelty thresholds</h3><div class="novgrid">
+            <label for="trG2">G² ≥</label><select id="trG2"><option value="3.84">3.84</option><option value="6.63">6.63</option><option value="10.83" selected>10.83</option><option value="15.13">15.13</option></select>
+            <label for="trRatio">Ratio ≥</label><select id="trRatio"><option value="2">2×</option><option value="3">3×</option><option value="4" selected>4×</option><option value="8">8×</option></select>
+            <label for="trN">Context units</label><select id="trN"><option value="1">1</option><option value="2">1–2</option><option value="3" selected>1–3</option></select>
+            <label for="trKeep">Kept ≤</label><select id="trKeep"><option value="0">0%</option><option value="0.25">25%</option><option value="0.5" selected>50%</option><option value="1">100%</option></select>
+          </div><div id="trOverlayHelp"></div></div></details>
+        <div class="ctl" id="trLedgerCtl" hidden><label for="trLedger">Saved evaluation</label><select id="trLedger"></select></div>
+      </div>
+      <div id="trOverlayLegend" class="trOverlayLegend" aria-live="polite"></div>
+      </div>
+      <div class="trSum" id="trSum"></div>
+      <div class="trText" id="trText"></div>
+    </div>
+    <aside class="side"><div id="detail3"></div><div class="detail" id="pageCard"></div>
+      <h2>Colors</h2>
+      <div class="ckey">
+        <span class="trk kept">unchanged</span><span>no rule, or keeping wins (+alt = alternatives exist)</span>
+        <span class="trk one">1:1<sup>1</sup></span><span>one supported candidate</span>
+        <span class="trk multi">several<sup>n</sup></span><span>most likely shown; n = supported candidates</span>
+        <span class="trk novel">novel<sup>!</sup></span><span>no match, and a strongly source-typical transition</span>
+      </div>
+      <details class="how"><summary>How this works</summary><ul>
+        <li>Candidates: the word and its rule partners, single steps and chains, both directions. A leading q is set aside.</li>
+        <li>Weight of keeping: the rate kept in both sections.</li>
+        <li>Weight of a partner: the smaller of the word&rsquo;s fall and the partner&rsquo;s rise.</li>
+        <li>Novel: no partner weight, into keeps &le; 50%, and a transition with G&sup2; &ge; 10.83 and &ge; 4&times;.</li>
+        <li>Transitions use Zattera units and the glyph-matrix app&rsquo;s statistics.</li>
+        <li>A reading aid from section frequencies, not a decipherment.</li>
+      </ul></details>
+    </aside>
+  </div>
+  <div class="rulesPage" id="rulesPage" hidden></div>
+  <div class="wb-page" id="workbenchPage" hidden></div>
+</div>
+<script src="release.js?v=c41a9e0089"></script>
+<script src="network_data.js?v=c730680c78"></script>
+<script src="rule_catalog_data.js?v=c1d53d4f93"></script>
+<script src="research_links.js?v=c929aa43a1"></script>
+<script src="rule_manager.js?v=86db5eee3d"></script>
+<script src="graph_metrics.js?v=4a20854dca"></script>
+<script src="graph_layout.js?v=b045185219"></script>
+<script src="connection_inspector.js?v=810b1d5bbc"></script>
+<script src="translation_insights.js?v=5b8ff1850d"></script>
+<script>
+(() => {
+const D = window.ECHO_DATA = window.EchoRuleManager.merge(window.ECHO_DATA, window.ECHO_RULE_CATALOG);
+const SEC = Object.fromEntries(D.sections.map(s => [s.key, s]));
+const MIDS = ['PharmaA', 'HA_late', 'Hand1_late'];
+const RULES = D.rules.map(r => r.code);
+const RINFO = Object.fromEntries(D.rules.map(r => [r.code, r]));
+const RULE_TIP = Object.fromEntries(D.rules.map(r => [r.code, `${r.code}: ${r.pattern} — ${r.name}`]));
+const rulePat = code => { const [c, step] = code.split('.'); const r = RINFO[c]; if (!r) return code; if (!step) return r.pattern; const p = r.pattern.split(' → '); return `${p[step - 1]} → ${p[step]}`; };
+const state = { mid: 'PharmaA', minTok: 6, scale: 'lin', rules: window.EchoRuleManager.selection(D.rules), sel: null, hover: null };
+const GM = window.EchoGraphMetrics;
+const graphWords = GM.vocabulary(D);
+// The Stages view reads the same data, vocabulary and active rules as Network and Sections.
+window.EchoApp = {data: D, words: graphWords, rules: () => state.rules};
+// ---------- repeats: optionally count a word repeated immediately on the same line (chol chol) once, in every
+// population. Counts come from the workbench lines (q-merged; a line break or unreadable gap ends a run) and must
+// reproduce the graph exactly as written, or the switch refuses. Everything that reads graphWords / D.sections
+// follows: Network, Sections, Stages, Translate counts and Residuals (active rules); saved LC1 tables and
+// Words & contexts do not.
+const repeats = {mode: 'keep', counts: null};
+window.EchoApp.repeats = () => repeats.mode;
+function repeatCounts() {
+  if (repeats.counts) return repeats.counts;
+  const C = window.EchoWorkbenchCore, lines = window.ECHO_WORKBENCH_DATA && window.ECHO_WORKBENCH_DATA.lines;
+  if (!C || !lines) throw new Error('Collapsing repeats needs the workbench line data.');
+  const out = {keep: new Map(), collapse: new Map()};
+  for (const s of D.sections) {
+    const keep = C.populationCounts(lines, s.key, false);
+    if (keep.N !== s.N || [...graphWords].some(([w, g]) => (g.count[s.key] || 0) !== (keep.counts.get(w) || 0)))
+      throw new Error(`Line counts for ${s.label} do not match the graph, so repeats cannot be collapsed.`);
+    out.keep.set(s.key, keep); out.collapse.set(s.key, C.populationCounts(lines, s.key, true));
+  }
+  return repeats.counts = out;
+}
+function setRepeats(mode) {
+  const view = repeatCounts()[mode];
+  D.sections.forEach((s, i) => {
+    const {N, counts} = view.get(s.key); s.N = N;
+    for (const [w, g] of graphWords) { const k = counts.get(w) || 0; g.count[s.key] = k; g.rate[s.key] = k * 10000 / N; if (D.lex[w]) D.lex[w][i] = k; }
+  });
+  for (const g of graphWords.values()) if ('total' in g) g.total = ['HA_early', 'Hand1_late', 'HB_all'].reduce((v, k) => v + (g.count[k] || 0), 0);
+  repeats.mode = mode;
+}
+const byId = Object.fromEntries(graphWords);
+state.query = ''; state.findMode = 'word';
+const svg = document.getElementById('net'), vp = document.getElementById('vp'), statusEl = document.getElementById('status');
+const NS = 'http://www.w3.org/2000/svg';
+const el = (t, a = {}, p) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
+let CSSV = {}; const css = v => (v in CSSV) ? CSSV[v] : (CSSV[v] = getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+const fmt = x => x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(1);
+// Dense graph labels use whole rates; inspectors retain decimal precision.
+// Preserve a visible nonzero cue instead of rounding small mass to zero.
+const graphRate = x => x > 1e-8 && x < 1 ? '<1' : Math.round(x).toString();
+const escapeHTML=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- controls
+const midSel = document.getElementById('mid');
+MIDS.forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = `${SEC[k].label} (${SEC[k].N.toLocaleString()} tok)`; midSel.appendChild(o); });
+midSel.onchange = () => { state.mid = midSel.value; fillCmp(); draw(); };
+// Mass bars compare one pair: the direct endpoints (default) or either leg through the middle section.
+state.cmp = 'direct';
+const cmpSel = document.getElementById('cmp');
+function fillCmp() {
+  const s = k => SHORT_POP[k] || SEC[k].label;
+  cmpSel.innerHTML = [['direct', `${s('HA_early')} → ${s('HB_all')}`], ['first', `${s('HA_early')} → ${s(state.mid)}`], ['second', `${s(state.mid)} → ${s('HB_all')}`]]
+    .map(([v, t]) => `<option value="${v}" ${v === state.cmp ? 'selected' : ''}>${t}</option>`).join('');
+}
+cmpSel.onchange = () => { state.cmp = cmpSel.value; draw(); if (state.sel) renderDetail(state.sel); };
+// Repeats (global bar): recount every population, then refresh whatever is open.
+const repSel = document.getElementById('repeats');
+repSel.onchange = () => {
+  const ctl = document.getElementById('repCtl');
+  try { setRepeats(repSel.value); ctl.classList.remove('error'); }
+  catch (e) { repSel.value = repeats.mode; ctl.classList.add('error'); ctl.title = e.message; console.error(e); return; }
+  [...midSel.options].forEach(o => { o.textContent = `${SEC[o.value].label} (${SEC[o.value].N.toLocaleString()} tok)`; });
+  draw.fitted = false;
+  if (['residuals', 'distribution', 'contexts', 'lab'].includes(state.tab)) window.EchoWorkbench?.show(state.tab); else redraw();
+  if (state.sel && (state.tab === 'net' || state.tab === 'sections')) renderDetail(state.sel);
+};
+const SHORT_POP = {HA_early: 'early A', HA_late: 'late A', PharmaA: 'pharma', Hand1_late: 'late A + pharma', HB_all: 'Herbal B'};
+const cmpPair = () => state.cmp === 'first' ? ['HA_early', state.mid] : state.cmp === 'second' ? [state.mid, 'HB_all'] : ['HA_early', 'HB_all'];
+const legPairs = () => { const all = [['HA_early', state.mid], [state.mid, 'HB_all'], ['HA_early', 'HB_all']], [a, b] = cmpPair(); return [[a, b], ...all.filter(([x, y]) => x !== a || y !== b)]; };
+fillCmp();
+const mt = document.getElementById('minTok');
+mt.oninput = () => { state.minTok = +mt.value; document.getElementById('minTokV').textContent = mt.value; redraw(); };
+document.querySelectorAll('#scale button').forEach(b => b.onclick = () => { state.scale = b.dataset.v; document.querySelectorAll('#scale button').forEach(x => x.classList.toggle('on', x === b)); redraw(); });
+document.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#themeSeg button').forEach(x => x.classList.toggle('on', x === b));
+  if (b.dataset.v === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', b.dataset.v);
+  try { localStorage.setItem('echoTheme', b.dataset.v); } catch (e) {}
+  if (typeof redraw === 'function') redraw(); else draw();
+});
+try { const t = localStorage.getItem('echoTheme'); if (t) document.querySelector(`#themeSeg button[data-v="${t}"]`).click(); } catch (e) {}
+const ruleManager = window.EchoRuleManager.create({data:D,catalog:window.ECHO_RULE_CATALOG,
+  getActive:()=>state.rules,
+  setActive:rules=>{state.rules=rules;draw.fitted=false;document.getElementById('manageRules').textContent=`Rules · ${rules.size} active`;redraw();},
+  addToLab:code=>window.EchoWorkbench.addCatalogRule(code)});
+state.rules=ruleManager.restore();
+document.getElementById('manageRules').textContent=`Rules · ${state.rules.size} active`;
+document.getElementById('manageRules').onclick=()=>ruleManager.open(()=>{if(state.tab==='rules')renderRules();});
+document.getElementById('find').oninput = e => {
+  state.query = e.target.value.trim(); state.sel = null; state.selCell = null;
+  const q = state.query.replace(/^q/, '');
+  const suggestions = [...graphWords.keys()].filter(w => w.startsWith(q)).slice(0, 30);
+  const list = document.getElementById('graphWords'); list.replaceChildren(...suggestions.map(w => { const o = document.createElement('option'); o.value = w; return o; }));
+  draw.fitted = false; redraw();
+};
+document.getElementById('findMode').onchange = e => { state.findMode = e.target.value; state.sel = null; state.selCell = null; draw.fitted = false; redraw(); };
+document.getElementById('clearFind').onclick = () => { const f = document.getElementById('find'); f.value = ''; f.dispatchEvent(new Event('input')); };
+
+document.getElementById('inspectConnections').onclick=()=>openConnections(state.sel||state.query.replace(/^q/,'')||'chol');
+function openConnections(word){
+  window.EchoConnectionInspector.open({data:D,word,active:state.rules,apply:ruleManager.apply,
+    focus:w=>{document.getElementById('findMode').value=state.findMode='direct';const f=document.getElementById('find');f.value=w;f.dispatchEvent(new Event('input'));}});
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-inspect-word]');if(b)openConnections(b.dataset.inspectWord);});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-stage-word]');if(b){window.EchoStages.focus(b.dataset.stageWord);document.querySelector('.tab[data-tab="stages"]').click();}});
+document.getElementById('expandDiagram').onclick = e => { const wide = document.querySelector('.app').classList.toggle('wideCanvas'); e.target.setAttribute('aria-pressed',wide); e.target.textContent = wide ? 'Show inspector' : 'Expand diagram'; draw.fitted = false; redraw(); };
+
+// ---------- sections in use
+const secs = () => ['HA_early', state.mid, 'HB_all'];
+const secVar = k => k === 'HA_early' ? '--secA' : k === 'HB_all' ? '--secB' : '--secM';
+// three token counts, each in its section's colour (early A, middle section, Herbal B)
+const secTxt = k => k === 'HA_early' ? '--secAt' : k === 'HB_all' ? '--secBt' : '--secMt';
+const tri = (n, S = secs()) => S.map(k => `<span style="color:${css(secTxt(k))}">${n.count[k]}</span>`).join('<span class="muted"> \u00b7 </span>');
+const triHead = (S = secs()) => S.map(k => `<span class="sw" title="${SEC[k].label}" style="background:${css(secVar(k))}"></span>`).join('') + '<span class="muted">tokens</span>';
+
+// ---------- graph filtering
+function visibleGraph() {
+  const S0 = state.tab === 'sections' ? state.cols : secs();
+  document.getElementById('minTok').disabled = !!state.query;
+  document.getElementById('minHint').textContent = state.query ? 'search overrides cutoff · q-merged exact spelling' : 'summed over the charted sections';
+  return GM.visible(D, graphWords, state.rules, S0, state.minTok, state.query, state.findMode);
+}
+
+// Scope is the full enabled connected family, not only bars surviving the cutoff.
+// Frequency balance is descriptive. Flow is a shared-capacity upper bound, never
+// the sum of ribbon widths or a claim that this mass actually moved.
+function familyAudit(ids, from = 'HA_early', to = 'HB_all') {
+  const full = GM.enabledGraph(D, state.rules), members = GM.closure(ids, full.adj);
+  return {members, ...GM.accounting(members, graphWords, D.sections, from, to, full.pairs)};
+}
+function familyBadge(ids, from = 'HA_early', to = 'HB_all') {
+  const a = familyAudit(ids, from, to);
+  return `${a.members.size>ids.length?'Full component ('+a.members.size+'): ':''}${fmt(a.unplaced)} source left · ${fmt(a.unfilled)} target missing /10k`;
+}
+// A single joint allocation feeds bars, ribbons, and the inspector. Never use
+// independent per-edge capacities as if each could spend the same source mass.
+let auditRuleKey='', auditCache=new Map();
+function pairAudit(from,to) {
+  const key=[...state.rules].sort().join('|')+'|'+repeats.mode;if(key!==auditRuleKey){auditRuleKey=key;auditCache.clear();}
+  const pair=from+'>'+to;
+  if(!auditCache.has(pair))auditCache.set(pair,GM.accounting(new Set(graphWords.keys()),graphWords,D.sections,from,to,GM.enabledGraph(D,state.rules).pairs));
+  return auditCache.get(pair);
+}
+// Least–most one word sends or receives across every equally good allocation (stage_flow, on the word's own group).
+// Pinned words only; cached by rules, repeats, comparison and word.
+const rangeCache = new Map();
+function wordRange(from, to, id) {
+  const key = [...state.rules].sort().join('|') + '|' + repeats.mode + '|' + from + '>' + to + '|' + id;
+  if (!rangeCache.has(key)) {
+    const SF = window.EchoStageFlow, n = graphWords.get(id); let out = null;
+    if (SF && n) {
+      const a = n.rate[from] || 0, b = n.rate[to] || 0, kind = a > b + 1e-9 ? 'sent' : b > a + 1e-9 ? 'received' : null;
+      if (kind) { const r = SF.wordRanges({words: [...graphWords.keys()], rate: (w, k) => graphWords.get(w)?.rate[k] || 0, P: from, R: to, mode: 'direct',
+        dest: SF.destinations(SF.graphPairs(D, state.rules))}, id, [kind]); if (r) out = {kind, ...r[kind]}; }
+    }
+    rangeCache.set(key, out);
+  }
+  return rangeCache.get(key);
+}
+function graphAuditHTML(id, withRanges = false) {
+  const fmt=x=>x.toFixed(1);
+  const span=(lo,hi)=>hi-lo>0.05?` <small class="mass-range" title="Least–most across equally good allocations">${fmt(Math.max(0,lo))}–${fmt(Math.max(0,hi))}</small>`:'';
+  const ids = id ? [id] : (G_cur?.nodes || []);
+  if (!ids.length) return '<div class="detail mass-audit"><h3>No matching word</h3><p>Try an exact spelling, with or without a leading q. Search includes the full lexicon even below the token cutoff.</p></div>';
+  const cols = state.tab === 'sections' ? state.cols : null;
+  // Sections: adjacent columns. Network: the selected comparison first, then the other two legs.
+  const pairs = cols ? cols.slice(1).map((to,i) => [cols[i],to]) : legPairs();
+  return `<div class="detail mass-audit"><div class="wb-eyebrow">Where the mass goes · per 10k</div><h3>${id?escapeHTML(id):'Select a word’s bar'}</h3><p class="wb-small">Orange = source left without a destination. Red = target still missing. Bars show one possible shared-capacity allocation, not the fitted LC1 result. Raw counts are in Counts below.</p>
+    ${pairs.map(([from,to])=>{
+      const a=familyAudit(ids,from,to), joint=pairAudit(from,to), row=id?joint.perWord.get(id):null;
+      const rg=row&&withRanges?wordRange(from,to,id):null, ex=row?row.source-row.retained:0, room=row?row.target-row.retained:0;
+      const sentR=rg?.kind==='sent'?span(rg.min,rg.max):'', leftR=rg?.kind==='sent'?span(ex-rg.max,ex-rg.min):'';
+      const recR=rg?.kind==='received'?span(rg.min,rg.max):'', missR=rg?.kind==='received'?span(room-rg.max,room-rg.min):'';
+      const routes=id?joint.routes.filter(r=>r.from===id||r.to===id):[];
+      const partners=id?[...GM.destinations(id,GM.enabledGraph(D,state.rules).pairs)].map(w=>joint.perWord.get(w)).filter(Boolean):[];
+      return `<div class="mass-pair"><div class="mass-title">${SEC[from].label} → ${SEC[to].label}</div>
+      ${row?`<table class="mass-ledger"><tr><th>Source ${escapeHTML(id)}</th><td>${fmt(row.source)}</td></tr><tr><td>Kept as ${escapeHTML(id)}</td><td>${fmt(row.retained)}</td></tr><tr><td>Sent to other forms</td><td>${fmt(row.sent)}${sentR}</td></tr><tr class="mass-left"><th>Left without a destination</th><td>${fmt(row.unplaced)}${leftR}</td></tr><tr><th>Target ${escapeHTML(id)}</th><td>${fmt(row.target)}</td></tr><tr><td>Same form already available</td><td>${fmt(row.retained)}</td></tr><tr><td>Received from other forms</td><td>${fmt(row.received)}${recR}</td></tr><tr class="mass-missing"><th>Still missing</th><td>${fmt(row.unfilled)}${missR}</td></tr></table>${sentR||recR?'<p class="wb-small mass-range-note">Grey: least–most across equally good allocations; the figures shown are one of them.</p>':''}
+      <p class="wb-small"><b>Routes in this allocation</b><br>${routes.map(r=>`${escapeHTML(r.from)} → ${escapeHTML(r.to)}: <b>${fmt(r.mass)}</b>`).join('<br>')||'No mass moves on this word’s routes.'}</p>
+      <div class="mass-equation" title="Values are rounded for display; accounting uses full precision.">Source ${fmt(row.source)} ≈ ${fmt(row.retained)} kept + ${fmt(row.sent)} sent + <b class="mass-left">${fmt(row.unplaced)} left</b><br>Target ${fmt(row.target)} ≈ ${fmt(row.retained)} kept + ${fmt(row.received)} received + <b class="mass-missing">${fmt(row.unfilled)} missing</b></div>
+      ${row.source>row.target+1e-8?`<details open><summary>Where could ${escapeHTML(id)} go?</summary><p class="wb-small">Each output has a single pool of room shared by all source words.</p>${partners.map(p=>{const own=joint.routes.filter(r=>r.from===id&&r.to===p.word).reduce((s,r)=>s+r.mass,0),other=joint.routes.filter(r=>r.to===p.word&&r.from!==id);return `<div class="mass-output"><b class="mono">${escapeHTML(p.word)}</b><dl><dt>Target rate</dt><dd>${fmt(p.target)}</dd><dt>Already kept in this form</dt><dd>${fmt(p.retained)}</dd><dt>Room for incoming words</dt><dd>${fmt(Math.max(0,p.target-p.retained))}</dd><dt>Used by ${escapeHTML(id)}</dt><dd>${fmt(own)}</dd><dt>Used by other sources</dt><dd>${fmt(p.received-own)}</dd><dt>Room still unfilled</dt><dd>${fmt(p.unfilled)}</dd></dl>${other.length?`<p class="wb-small">Other sources: ${other.map(r=>`${escapeHTML(r.from)} ${fmt(r.mass)}`).join(' + ')}.</p>`:''}</div>`;}).join('')||'<p class="wb-small">No output is licensed by the enabled rules.</p>'}</details>`:''}
+      ${row.received>0?`<p class="wb-small">All source forms share this target’s remaining room: <b>${fmt(row.target-row.retained)}</b>. It cannot be credited separately to every incoming word.</p>`:''}`:''}
+      <p class="wb-small">${id?'Whole connected family':'Families in view'}: <b class="mass-left">${fmt(a.unplaced)} source left</b> · <b class="mass-missing">${fmt(a.unfilled)} target missing</b>. These amounts remain unexplained.</p></div>`;
+    }).join('')}
+    ${cols ? '' : `<p class="wb-small">Each comparison is its own allocation; they are not one path and cannot be added. ${id ? `<button class="wb-button" data-stage-word="${escapeHTML(id)}">Linked path in Stages</button>` : 'The Stages tab links them.'}</p>`}
+    <details><summary>Allocation method and limits</summary><p class="wb-small">First retain the rate shared by the same spelling. Allocate only remaining source excess into remaining target room, jointly across enabled pairings and declared two-step endpoints. This is one maximum-flow allocation; individual routes can vary when several solutions tie. It is an optimistic capacity example, not the saved LC1 fitted policy or recovered ancestry. Hidden low-count partners participate and appear in the route list. Source = kept + sent + left; target = kept + received + missing.</p></details></div>`;
+}
+
+// ---------- layout: components, longest-path layers, barycentre ordering, shelf packing
+// 32px bar pitch leaves room for four-digit integer labels at 11px monospace.
+const G = { colW: 190, rowH: 158, glyphW: 78, barW: 14, gap: 18, maxBar: 72, famPad: 26 };
+let nodesPos = new Map(), dummyPos = new Map(), lastBox = null;
+function layout(g) {
+  const adj = new Map(g.nodes.map(n => [n, []]));
+  g.edges.forEach(e => { adj.get(e.s).push(e.t); adj.get(e.t).push(e.s); });
+  const comp = new Map(); const comps = [];
+  for (const n of g.nodes) {
+    if (comp.has(n)) continue;
+    const c = []; const st = [n]; comp.set(n, comps.length);
+    while (st.length) { const x = st.pop(); c.push(x); for (const y of adj.get(x)) if (!comp.has(y)) { comp.set(y, comps.length); st.push(y); } }
+    comps.push(c);
+  }
+  const mass = n => { const r = byId[n].rate; return r.HA_early + r[state.mid] + r.HB_all; };
+  const boxes = comps.map(c => {
+    const set = new Set(c);
+    const es = g.edges.filter(e => set.has(e.s));
+    if(window.EchoGraphLayout.dense(c.length,es.length))return window.EchoGraphLayout.overview(c,es,mass,G);
+    // longest-path layering: column = number of rule steps from a word no rule produces (graph is acyclic)
+    const layer = new Map(c.map(n => [n, 0]));
+    for (let it = 0; it < c.length + 2; it++) { let ch = false; es.forEach(e => { if (layer.get(e.t) < layer.get(e.s) + 1 && layer.get(e.s) + 1 < 12) { layer.set(e.t, layer.get(e.s) + 1); ch = true; } }); if (!ch) break; }
+    const L = Math.max(...layer.values()) + 1;
+    // an edge that skips columns gets one placeholder per skipped column, so ordering and routing see it
+    const lay = new Map(layer), isDummy = new Set(), segs = [], chains = new Map();
+    es.forEach(e => {
+      const a = layer.get(e.s), b = layer.get(e.t);
+      if (b - a <= 1) { segs.push([e.s, e.t]); return; }
+      let prev = e.s; const ds = [];
+      for (let k = a + 1; k < b; k++) { const d = `\u0000${e.s}>${e.t}#${k}`; lay.set(d, k); isDummy.add(d); ds.push(d); segs.push([prev, d]); prev = d; }
+      segs.push([prev, e.t]); chains.set(e.s + '>' + e.t, ds);
+    });
+    const cols = Array.from({ length: L }, () => []);
+    lay.forEach((k, n) => cols[k].push(n));
+    const up = new Map(), dn = new Map();
+    segs.forEach(([u, v]) => { (dn.get(u) || dn.set(u, []).get(u)).push(v); (up.get(v) || up.set(v, []).get(v)).push(u); });
+    const w8 = n => isDummy.has(n) ? 0 : mass(n);
+    cols.forEach(col => col.sort((a, b) => w8(b) - w8(a)));
+    const pos = new Map(); const setPos = () => cols.forEach(col => col.forEach((n, j) => pos.set(n, j)));
+    setPos();
+    const between = i => segs.filter(([u, v]) => lay.get(u) === i && lay.get(v) === i + 1);
+    const crossPair = i => { const E = between(i); let x = 0;
+      for (let a = 0; a < E.length; a++) for (let b = a + 1; b < E.length; b++) {
+        const d1 = pos.get(E[a][0]) - pos.get(E[b][0]), d2 = pos.get(E[a][1]) - pos.get(E[b][1]); if (d1 * d2 < 0) x++; }
+      return x; };
+    const crossings = () => { let x = 0; for (let i = 0; i + 1 < L; i++) x += crossPair(i); return x; };
+    const snapshot = () => cols.map(col => col.slice());
+    let best = snapshot(), bestX = crossings();
+    // barycentre sweeps, alternating direction; keep the ordering with the fewest crossings
+    for (let it = 0; it < 28 && bestX > 0; it++) {
+      const down = it % 2 === 0;
+      const order = down ? cols.map((_, i) => i) : cols.map((_, i) => L - 1 - i);
+      order.forEach(i => {
+        const col = cols[i];
+        const bc = n => { const nb = (down ? up : dn).get(n) || []; return nb.length ? nb.reduce((a, m) => a + pos.get(m), 0) / nb.length : pos.get(n); };
+        const key = new Map(col.map(n => [n, bc(n)]));
+        col.sort((a, b) => key.get(a) - key.get(b) || pos.get(a) - pos.get(b)); col.forEach((n, j) => pos.set(n, j));
+      });
+      const x = crossings(); if (x < bestX) { bestX = x; best = snapshot(); }
+    }
+    best.forEach((col, i) => { cols[i] = col; }); setPos();
+    // local improvement: swap neighbours whenever that removes crossings
+    for (let pass = 0; pass < 12 && bestX > 0; pass++) {
+      let improved = false;
+      cols.forEach((col, i) => {
+        for (let j = 0; j + 1 < col.length; j++) {
+          const local = () => (i > 0 ? crossPair(i - 1) : 0) + (i + 1 < L ? crossPair(i) : 0);
+          const before = local();
+          [col[j], col[j + 1]] = [col[j + 1], col[j]]; pos.set(col[j], j); pos.set(col[j + 1], j + 1);
+          if (local() < before) improved = true;
+          else { [col[j], col[j + 1]] = [col[j + 1], col[j]]; pos.set(col[j], j); pos.set(col[j + 1], j + 1); }
+        }
+      });
+      if (!improved) break;
+    }
+    // vertical positions: pull each item level with its neighbours, keep the order and the spacing
+    const size = n => isDummy.has(n) ? 30 : G.rowH;
+    const yv = new Map();
+    cols.forEach(col => { let y = 0; col.forEach((n, j) => { if (j) y += (size(col[j - 1]) + size(n)) / 2; yv.set(n, y); }); });
+    const place = (col, want) => {
+      const n = col.length; if (!n) return;
+      const f = new Array(n), b = new Array(n);
+      for (let j = 0; j < n; j++) f[j] = j ? Math.max(want[j], f[j - 1] + (size(col[j - 1]) + size(col[j])) / 2) : want[j];
+      for (let j = n - 1; j >= 0; j--) b[j] = j < n - 1 ? Math.min(want[j], b[j + 1] - (size(col[j]) + size(col[j + 1])) / 2) : want[j];
+      const m = f.map((v, j) => (v + b[j]) / 2);
+      for (let j = 0; j < n; j++) { const v = j ? Math.max(m[j], yv.get(col[j - 1]) + (size(col[j - 1]) + size(col[j])) / 2) : m[j]; yv.set(col[j], v); }
+    };
+    for (let it = 0; it < 10; it++) {
+      const order = it % 2 === 0 ? cols.map((_, i) => i) : cols.map((_, i) => L - 1 - i);
+      order.forEach(i => { const col = cols[i];
+        const want = col.map(n => { const nb = [...(up.get(n) || []), ...(dn.get(n) || [])]; return nb.length ? nb.reduce((a, m) => a + yv.get(m), 0) / nb.length : yv.get(n); });
+        place(col, want); });
+    }
+    const y0 = Math.min(...yv.values());
+    const coords = new Map(), dummies = new Map();
+    c.forEach(n => coords.set(n, { x: lay.get(n) * G.colW, y: yv.get(n) - y0 }));
+    chains.forEach((ds, k) => dummies.set(k, ds.map(d => ({ x: lay.get(d) * G.colW, y: yv.get(d) - y0 }))));
+    const H = Math.max(...[...yv.values()].map(v => v - y0)) + G.rowH;
+    const title = c.slice().sort((a, b) => mass(b) - mass(a)).slice(0, 3).join(' \u00b7 ');
+    return { nodes: c, edges: es, coords, dummies, crossings: bestX, w: (L - 1) * G.colW + G.glyphW + 70, h: H, title, mass: c.reduce((a, n) => a + mass(n), 0) };
+  });
+  boxes.sort((a, b) => b.mass - a.mass);
+  // shelf packing to a target width
+  const W = Math.max(700, (svg.clientWidth - 40) / 0.9);
+  let x = 0, y = 0, shelfH = 0;
+  boxes.forEach(b => {
+    if (x > 0 && x + b.w > W) { x = 0; y += shelfH + G.famPad * 2; shelfH = 0; }
+    b.x = x; b.y = y; x += b.w + G.famPad * 2; shelfH = Math.max(shelfH, b.h - 20);
+  });
+  return boxes;
+}
+// ---------- drawing
+let view = { k: 1, x: 20, y: 20 };
+function applyView() { vp.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); }
+let scaleMax = 1;
+function barH(r) { if (r <= 0) return 0; return state.scale === 'lin' ? G.maxBar * r / scaleMax : G.maxBar * Math.sqrt(r / scaleMax); }
+
+function glyph(parent, n, x, y, big) {
+  const g = el('g', { class: 'node', transform: `translate(${x},${y})` }, parent);
+  g.dataset.id = n.id;
+  const S = secs(); const hollow = S.every(k => n.count[k] === 0);
+  const [cmpFrom, cmpTo] = cmpPair(), mass = pairAudit(cmpFrom, cmpTo).perWord.get(n.id);
+  el('rect', { class: 'hit', x: -8, y: -G.maxBar - 22, width: G.glyphW + 16, height: G.maxBar + 42, rx: 6 }, g);
+  S.forEach((k, i) => {
+    const h = barH(n.rate[k]); const bx = i * (G.barW + G.gap);
+    if (h > 0) el('rect', { x: bx, y: -h, width: G.barW, height: h, rx: 1.5, fill: css(secVar(k)) }, g);
+    else el('rect', { x: bx, y: -1.5, width: G.barW, height: 1.5, fill: css('--line2') }, g);
+    const missing=k===cmpFrom?mass.unplaced:k===cmpTo?mass.unfilled:0;
+    if(missing>1e-8){const retainedH=barH(Math.max(0,n.rate[k]-missing));el('rect',{x:bx,y:-h,width:G.barW,height:Math.max(1,h-retainedH),fill:k===cmpFrom?'#d99836':'#d96b77',class:'mass-segment'},g);}
+    const bn = el('text', { class: 'bnum', x: bx + G.barW / 2, y: -Math.max(h, 1.5) - 3, 'text-anchor': 'middle', fill: css(n.count[k] ? secTxt(k) : '--muted') }, g); bn.textContent = graphRate(n.rate[k]);
+    el('title',{},bn).textContent=`${SEC[k].label}: ${fmt(n.rate[k])} /10k (${n.count[k]} tokens)`;
+  });
+  el('line', { class: 'base', x1: -3, x2: G.glyphW + 3, y1: 0.5, y2: 0.5 }, g);
+  const t = el('text', { class: 'nlabel', x: G.glyphW / 2, y: 14, 'text-anchor': 'middle' }, g); t.textContent = n.id;
+  const tag = k => ({HA_early: 'A', HB_all: 'B', PharmaA: 'ph', HA_late: 'lA', Hand1_late: 'mid'}[k] || k);
+  el('text',{class:'word-mass mass-left',x:G.glyphW/2,y:28,'text-anchor':'middle'},g).textContent=`${tag(cmpFrom)} left ${graphRate(mass.unplaced)}`;
+  el('text',{class:'word-mass mass-missing',x:G.glyphW/2,y:40,'text-anchor':'middle'},g).textContent=`${tag(cmpTo)} missing ${graphRate(mass.unfilled)}`;
+  el('title',{},g).textContent=`${n.id}: source ${fmt(mass.source)} = kept ${fmt(mass.retained)} + sent ${fmt(mass.sent)} + left ${fmt(mass.unplaced)}; target ${fmt(mass.target)} = kept ${fmt(mass.retained)} + received ${fmt(mass.received)} + missing ${fmt(mass.unfilled)} /10k`;
+  if (hollow) { el('rect', { x: -2, y: -18, width: G.glyphW + 4, height: 18, rx: 3, fill: 'none', stroke: css('--line2'), 'stroke-dasharray': '2 2' }, g); }
+  return g;
+}
+
+function edgePath(a, b, via) {
+  const x1 = a.x + G.glyphW + 6, y1 = a.y - 22, x2 = b.x - 8, y2 = b.y - 22;
+  if (x2 <= x1) { // same column or backwards (rare): arc above
+    const my = Math.min(y1, y2) - 40;
+    return `M${a.x + G.glyphW / 2},${a.y - G.maxBar - 4} C${a.x + G.glyphW / 2},${my} ${b.x + G.glyphW / 2},${my} ${b.x + G.glyphW / 2},${b.y - G.maxBar - 4}`;
+  }
+  // points: start, each placeholder (a column skipped), end; horizontal tangents at every point
+  const pts = [[x1, y1], ...(via || []).map(d => [d.x + G.glyphW / 2, d.y - 22]), [x2, y2]];
+  let dstr = `M${pts[0][0]},${pts[0][1]}`;
+  for (let k = 1; k < pts.length; k++) { const [px, py] = pts[k - 1], [qx, qy] = pts[k], dx = Math.max(24, (qx - px) * 0.5);
+    dstr += ` C${px + dx},${py} ${qx - dx},${qy} ${qx},${qy}`; }
+  return dstr;
+}
+
+
+let G_cur = null;
+function draw() {
+  CSSV = {}; const g = visibleGraph(); G_cur = g;
+  const detailedLabels=!window.EchoGraphLayout.dense(g.nodes.length,g.edges.length);
+  scaleMax = Math.max(1, ...g.nodes.flatMap(n => secs().map(k => byId[n].rate[k])));
+  const boxes = layout(g);
+  vp.innerHTML = '';
+  computeDeg(g);
+  nodesPos = new Map(); dummyPos = new Map();
+  const eL = el('g', {}, vp), nL = el('g', {}, vp), pL = el('g', {}, vp);
+  boxes.forEach(b => {
+    const fg = el('g', { class: 'fam', transform: `translate(${b.x},${b.y})` }, eL);
+    const ft = el('text', { class: 'flabel', x: 0, y: -26 }, fg); ft.textContent = b.title + (b.nodes.length > 3 ? ' …' : '') + `   (${b.nodes.length} words)`;
+    el('text', {class:'family-audit', x:0, y:-9}, fg).textContent = familyBadge(b.nodes, ...cmpPair());
+    b.coords.forEach((p, n) => nodesPos.set(n, { x: b.x + p.x, y: b.y + p.y + G.maxBar + 20 }));
+    b.dummies.forEach((pts, k) => dummyPos.set(k, pts.map(q => ({ x: b.x + q.x, y: b.y + q.y + G.maxBar + 20 }))));
+  });
+  const drawn = [];
+  g.edges.forEach(e => {
+    const a = nodesPos.get(e.s), b = nodesPos.get(e.t);
+    const eg = el('g', { class: 'edgeg' }, eL); eg.dataset.s = e.s; eg.dataset.t = e.t; eg.dataset.r = e.rules.join(' ');
+    const cls = mapClass(e);
+    eg.dataset.m = cls;
+    const p = el('path', { class: 'edge ' + cls, d: edgePath(a, b, dummyPos.get(e.s + '>' + e.t)) }, eg);
+    el('title', {}, eg).textContent = `${e.s} \u2014 ${e.t}: ${e.label}   (${MAP_TXT[cls].short})\n` + e.rules.map(r => { const [c, s2] = r.split('.'); return s2 ? `${c} step ${s2} of 2 (${RINFO[c].pattern})` : `${c} (${RINFO[c].pattern})`; }).join('\n');
+    // Geometry sampling and all-edge label collision checks dominated render
+    // time on expanded inventories. Dense views use native hover titles only.
+    if(detailedLabels){
+      const len = p.getTotalLength ? p.getTotalLength() : 0;
+      const samples = []; for (let d = 0; d <= len; d += Math.max(8,len/80)) { const q = p.getPointAtLength(d); samples.push([q.x, q.y]); }
+      drawn.push({ e, eg, p, len, samples, a, b });
+    }
+  });
+  // each label goes where it covers the fewest other lines and no earlier label
+  const pills = [];
+  drawn.forEach(D0 => {
+    const label = state.query&&state.findMode==='direct'?D0.e.rules.join(' / '):D0.e.label, tw = [...label].length * 6.9 + 14;
+    let bestM = null, bestScore = Infinity;
+    for (const f of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82]) {
+      const q = D0.len ? D0.p.getPointAtLength(D0.len * f) : { x: (D0.a.x + D0.b.x) / 2, y: (D0.a.y + D0.b.y) / 2 };
+      let score = Math.abs(f - 0.5);
+      drawn.forEach(o => { if (o === D0) return; for (const [sx, sy] of o.samples) if (Math.abs(sx - q.x) < tw / 2 + 3 && Math.abs(sy - q.y) < 10) { score += 2; break; } });
+      if (pills.some(r => Math.abs(r.x - q.x) < (r.w + tw) / 2 + 4 && Math.abs(r.y - q.y) < 20)) score += 10;
+      if (score < bestScore) { bestScore = score; bestM = q; }
+    }
+    pills.push({ x: bestM.x, y: bestM.y, w: tw });
+    const pg = el('g', { class: 'pill', transform: `translate(${bestM.x},${bestM.y})` }, D0.eg);
+    el('rect', { x: -tw / 2, y: -9, width: tw, height: 18, rx: 9 }, pg);
+    const tt = el('text', { x: 0, y: 4, 'text-anchor': 'middle' }, pg); tt.textContent = label;
+  });
+  g.nodes.forEach(id => { const p = nodesPos.get(id); const gg = glyph(nL, byId[id], p.x, p.y); badges(gg, id); bindNode(gg, id); });
+  if (!g.nodes.length) el('text', {x:20,y:40,class:'flabel'}, vp).textContent = state.query ? 'No word matches this exact spelling.' : 'No rule families at this cutoff.';
+  lastBox = boxes.length ? { w: Math.max(...boxes.map(b => b.x + b.w)), h: Math.max(...boxes.map(b => b.y + b.h)) + G.maxBar + 20 } : null;
+  if (!draw.fitted) { fit(); draw.fitted = true; } else applyView();
+  if (state.sel && nodesPos.has(state.sel)) select(state.sel, true); else { state.sel = null; renderDetail(null); }
+  drawKey();
+  status(null);
+}
+let degL = new Map(), degR = new Map();
+// pairing multiplicity among the words shown: left = the form without the inserted material, right = with it
+function computeDeg(g) { degL = new Map(); degR = new Map(); g.edges.forEach(e => { degR.set(e.s, (degR.get(e.s) || 0) + 1); degL.set(e.t, (degL.get(e.t) || 0) + 1); }); }
+const MAP_TXT = {
+  m11: { short: 'one-to-one', long: '<b>one-to-one</b>' },
+  m1n: { short: 'one word, several forms', long: '<b>one \u2192 several</b> <span class="muted">left word has several partners</span>' },
+  mn1: { short: 'several forms, one word', long: '<b>several \u2192 one</b> <span class="muted">right word has several partners</span>' },
+  mnn: { short: 'many-to-many', long: '<b>many-to-many</b>' }
+};
+function mapClass(e) { const a = degR.get(e.s) || 0, b = degL.get(e.t) || 0; return a > 1 ? (b > 1 ? 'mnn' : 'm1n') : (b > 1 ? 'mn1' : 'm11'); }
+function badges(g, id) {
+  const put = (n, x, v) => { if (n < 2) return; const bg = el('g', { class: 'badge', transform: `translate(${x},${-G.maxBar / 2})` }, g);
+    const t = '\u00d7' + n; const w = t.length * 7.6 + 10; el('rect', { x: -w / 2, y: -9.5, width: w, height: 19, rx: 9.5, fill: css(v) }, bg);
+    const tx = el('text', { x: 0, y: 4.2, 'text-anchor': 'middle' }, bg); tx.textContent = t; };
+  put(degL.get(id) || 0, -22, '--mn1');
+  put(degR.get(id) || 0, G.glyphW + 22, '--m1n');
+}
+
+// ---------- interaction
+function trace(id) {
+  const on = new Set([id]); const eon = new Set();
+  const walk = (x, dir) => { (dir ? G_cur.out : G_cur.inn).get(x)?.forEach(e => { if (!G_cur.edges.includes(e)) return; eon.add(e.s + '>' + e.t); const y = dir ? e.t : e.s; if (!on.has(y)) { on.add(y); walk(y, dir); } }); };
+  walk(id, true); walk(id, false);
+  return { on, eon };
+}
+function paint(on, eon) {
+  vp.classList.add('dim');
+  vp.querySelectorAll('.node').forEach(n => n.classList.toggle('on', on.has(n.dataset.id)));
+  vp.querySelectorAll('.edgeg').forEach(e => { const k = eon.has(e.dataset.s + '>' + e.dataset.t); e.classList.toggle('on', k); });
+}
+function clearHi() {
+  if (state.sel) { const t = trace(state.sel); paint(t.on, t.eon); return; }
+  vp.classList.remove('dim'); vp.querySelectorAll('.on').forEach(x => x.classList.remove('on'));
+}
+function highlightRule(r) {
+  const on = new Set(), eon = new Set();
+  G_cur.edges.forEach(e => { if (e.rules.some(x => x.split('.')[0] === r)) { on.add(e.s); on.add(e.t); eon.add(e.s + '>' + e.t); } });
+  paint(on, eon);
+}
+function bindNode(g, id) {
+  g.addEventListener('mouseenter', () => { if (!state.sel) { const t = trace(id); paint(t.on, t.eon); renderDetail(id, true); } status(id); });
+  g.addEventListener('mouseleave', () => { clearHi(); if (!state.sel) renderDetail(null); status(null); });
+  g.addEventListener('click', ev => { ev.stopPropagation(); select(state.sel === id ? null : id); });
+}
+svg.addEventListener('click', () => { if (!moved) select(null); });
+function select(id, keep) {
+  state.sel = id;
+  if (id && !keep && nodesPos.has(id)) { const p = nodesPos.get(id), sx = view.x + p.x * view.k, sy = view.y + p.y * view.k;
+    if (sx < 40 || sx > svg.clientWidth - 80 || sy < 60 || sy > svg.clientHeight - 60) centerOn(p); }
+  vp.querySelectorAll('.node').forEach(n => n.classList.toggle('sel', n.dataset.id === id));
+  if (id) { const t = trace(id); paint(t.on, t.eon); } else clearHi();
+  renderDetail(id);
+}
+function rowsFor(n) {
+  return secs().map(k => `<tr><td><span class="sw" style="background:${css(secVar(k))}"></span>${SEC[k].label}</td><td>${fmt(n.rate[k])}</td><td>${n.count[k]}</td></tr>`).join('');
+}
+function status(id) {
+  const statusEl = document.getElementById(state.tab === 'sections' ? 'status2' : 'status');
+  const [cf, ct] = cmpPair(), enc = state.tab === 'sections' ? '' : `<span class="enc">Bars & numbers: per 10k. Orange = ${SHORT_POP[cf]} left; red = ${SHORT_POP[ct]} missing.</span>`;
+  if (!id && state.tab === 'sections') { statusEl.innerHTML = `<span class="muted">Scroll to move. Hover a word for its pairings with neighbouring sections; click to pin the breakdown.</span>`; return; }
+  if (!id) { statusEl.innerHTML = `<span class="muted">${G_cur&&window.EchoGraphLayout.dense(G_cur.nodes.length,G_cur.edges.length)?'Large network · all connections shown; hover an edge for its rule. ':''}Drag to pan, wheel to zoom. Click a word to pin its breakdown.</span>${enc}`; return; }
+  const n = byId[id], L = degL.get(id) || 0, Rr = degR.get(id) || 0;
+  const kind = L > 1 && Rr > 1 ? `${L} left and ${Rr} right partners` : L > 1 ? `${L} left partners` : Rr > 1 ? `${Rr} right partners` : (L + Rr ? 'one-to-one' : 'no pairing shown');
+  const tag = state.sel && state.sel !== id ? `<span class="htag">hover</span>` : state.sel === id ? `<span class="htag pin">pinned</span>` : `<span class="htag">hover</span>`;
+  statusEl.innerHTML = tag + `<span class="w">${id}</span>` + secs().map(k => `<span><span class="sw" style="background:${css(secVar(k))}"></span>${SEC[k].label} <b>${fmt(n.rate[k])}</b> <span class="muted">(${n.count[k]})</span></span>`).join('') + `<span class="muted">per 10k (tokens) \u00b7 ${kind}</span>` + enc;
+}
+const ALLOC_SRC = [['HA_early', 'early A'], ['PharmaA', 'pharma'], ['HA_late', 'late A'], ['Hand1_late', 'hand-1 late']];
+state.allocSrc = 'HA_early'; state.routeSet = 'E1';
+const pct = (v, G) => G > 0 ? Math.round(100 * v / G) + '%' : '–';
+const num = v => v >= 100 ? v.toFixed(0) : v.toFixed(1);
+function rangeBar(lo, hi, cap, scale, color, cls = '') {
+  // outlined capacity, solid = received in EVERY optimal allocation, light = received in SOME
+  const w = v => Math.max(0, Math.min(100, 100 * v / scale));
+  return `<div class="rbar ${cls}"><div class="cap" style="width:${w(cap)}%"></div>
+    <div class="lo" style="width:${w(lo)}%;background:${color}"></div>
+    <div class="hi" style="left:${w(lo)}%;width:${w(hi) - w(lo)}%;background:${color}"></div></div>`;
+}
+function allocBlock(id) {
+  const tgtLab = SEC[D.target].label, rs = state.routeSet;
+  const cols = ALLOC_SRC.map(([k]) => ({ k, l: SEC[k].label, cell: D.alloc[k] }));
+  const sets = Object.keys(D.alloc.HA_early);
+  const role = cols.map(c => { const a = c.cell.E1.words[id] || c.cell.B0.words[id]; return a ? { G: a.gain, L: a.loss } : { G: 0, L: 0 }; });
+  if (role.every(r => r.G <= 0 && r.L <= 0)) return { alloc: `<div class="muted">The frozen B0 and E1 rule sets give this word no route. The ledger above uses the active rules.</div>`, routes: '' };
+  // bar hue: the source section's own colour when it is charted, else neutral; demand met is Herbal B's colour
+  const hue = (k, r) => r.G > 0 ? css('--secB') : css(k === 'HA_early' ? '--secA' : k === 'PharmaA' ? '--secM' : '--secN');
+  // a rule set that places nothing from any source collapses to one line, so the other gets the width
+  const zero = set => cols.every((c, i) => { const a = c.cell[set].words[id], r = role[i]; if (!a || (r.G <= 0 && r.L <= 0)) return true; const x = (r.G > 0 ? a.in : a.out) || [0, 0]; return x[1] < 1e-9; });
+  const shown = sets.filter(x => !zero(x)), collapsed = sets.filter(zero);
+  let h = `<div class="cap2" title="Demand = how much more often ${tgtLab} writes the word (per 10k). Excess = how much more often the source writes it. Both differ by source, since each is a difference from that source's rate.">Bars: share of the demand met, or of the excess placed. <span class="muted">Hover for definitions; see also ? glossary.</span></div>
+    ${collapsed.length ? `<div class="collapsed">${collapsed.map(x => `<b>${x}</b>: 0% from every source`).join(' \u00b7 ')}</div>` : ''}
+    <div class="at" style="grid-template-columns: 104px 80px ${shown.map(() => 'minmax(0, 1fr)').join(' ')}"><span class="hd">source</span><span class="hd">per 10k</span>${shown.map(x => `<span class="hd">${x}</span>`).join('')}`;
+  cols.forEach((c, i) => {
+    const r = role[i];
+    h += `<span class="sl"><span class="sw" style="background:${hue(c.k, { G: 0 })}"></span>${c.l}</span><span class="role">${r.G > 0 ? `demand <b>${num(r.G)}</b>` : r.L > 0 ? `excess <b>${num(r.L)}</b>` : '<span class="dash">\u2013</span>'}</span>`;
+    shown.forEach(set => {
+      const a = c.cell[set].words[id];
+      if (!a || (r.G <= 0 && r.L <= 0)) { h += '<span class="c dash">\u2013</span>'; return; }
+      const cap = r.G > 0 ? r.G : r.L, x = (r.G > 0 ? a.in : a.out) || [0, 0];
+      const txt = x[1] - x[0] < 0.05 ? pct(x[0], cap) : pct(x[0], cap) + '\u2013' + pct(x[1], cap);
+      h += `<span class="c" title="${set}, from ${c.l}: ${r.G > 0 ? 'demand met' : 'excess placed'} ${txt}">${rangeBar(x[0], x[1], cap, cap, hue(c.k, r))}<span class="v">${txt}</span></span>`;
+    });
+  });
+  const ks = css('--secA');
+  h += `</div><div class="akey"><span class="k" style="background:${ks}"></span><span>solid = in every optimal allocation</span><span class="k" style="background:${ks};opacity:.35"></span><span>light = in some (the range across optima)</span><span class="k hatch"></span><span>hatched = demand left unmet, or excess left unplaced</span><span></span><span class="muted">bar colour = source section</span></div>`;
+  const partners = new Map();
+  cols.forEach(c => { const a = c.cell[rs].words[id]; if (!a) return;
+    a.ins.forEach(e => { if (!partners.has(e.s)) partners.set(e.s, { rules: e.rules, cells: {} }); partners.get(e.s).cells[c.k] = e; });
+    a.outs.forEach(e => { if (!partners.has(e.t)) partners.set(e.t, { rules: e.rules, cells: {} }); partners.get(e.t).cells[c.k] = e; }); });
+  const seg2 = `<div class="seg small" id="routeSeg">${sets.map(x => `<button data-v="${x}" class="${x === rs ? 'on' : ''}">${x}</button>`).join('')}</div>`;
+  let rt = `<div class="bh">${partners.size} partner${partners.size === 1 ? '' : 's'} <span class="muted" style="font-weight:400">per 10k, least\u2013most</span> ${seg2}</div>`;
+  if (!partners.size) rt += `<div class="muted">No admissible route under ${rs}.</div>`;
+  else {
+    rt += `<div class="am"><span></span>${cols.map(c => `<span class="hd">${c.l}</span>`).join('')}`;
+    [...partners.entries()].sort((a, b) => Math.max(...Object.values(b[1].cells).map(e => e.max)) - Math.max(...Object.values(a[1].cells).map(e => e.max))).forEach(([w, pinfo]) => {
+      const pat = pinfo.rules.map(r => RINFO[r] ? RINFO[r].pattern : r).join(' / ');
+      rt += `<div class="pw"><span class="mono">${w}</span><span class="mono muted">${pat} <span class="code">${pinfo.rules.join('+')}</span></span></div><span class="rl"></span>`;
+      rt += cols.map((c, i) => { const e = pinfo.cells[c.k], r = role[i]; if (!e) return '<span class="c dash">\u2013</span>';
+        const cap = r.G > 0 ? r.G : r.L;
+        return `<span class="c">${rangeBar(e.min, e.max, e.cap, Math.max(cap, e.max, 1e-9), hue(c.k, r), 'thin')}<span class="v mono">${e.max - e.min < 0.05 ? num(e.min) : num(e.min) + '\u2013' + num(e.max)}</span></span>`; }).join('');
+    });
+    rt += `</div>`;
+  }
+  h += `<details class="how"><summary>How this works</summary><ul>
+    <li>Each row: one source section against ${tgtLab}, JA1 method.</li>
+    <li>Only the excess moves. Capacity is shared across rules. A two-step rule is one route.</li>
+    <li>Maximum matched mass (E1, per 10k): ${cols.map(c => `${c.l} ${num(c.cell.E1.M)}`).join(', ')}.</li>
+    <li>Bounds, not provenance.</li></ul></details>`;
+  return { alloc: h, routes: rt };
+}
+function renderDetail(id, preview) {
+  const box = document.getElementById(state.tab === 'sections' ? 'detail2' : 'detail');
+  if(!id&&state.query&&G_cur.nodes.includes(state.query.replace(/^q/,'')))id=state.query.replace(/^q/,'');
+  if (!id) { box.innerHTML = graphAuditHTML(state.query && G_cur.nodes.includes(state.query.replace(/^q/,'')) ? state.query.replace(/^q/,'') : null) + `<div class="detail"><div class="note">Hover a word to trace its routes. Click to pin its family accounting, counts, and allocation bounds.</div></div>`; return; }
+  const n = byId[id];
+  const ins = (G_cur.inn.get(id) || []).filter(e => G_cur.edges.includes(e)), outs = (G_cur.out.get(id) || []).filter(e => G_cur.edges.includes(e));
+  // Moved = mass along this pairing in the live allocation for the Mass bars comparison (same as the ledger above);
+  // a two-way pairing also shows any flow the other way.
+  const [mf, mt] = cmpPair(), routes = pairAudit(mf, mt).routes;
+  const moved = (a, b) => routes.filter(r => r.from === a && r.to === b).reduce((t, r) => t + r.mass, 0);
+  const movedCell = (e, dir) => { const o = dir ? e.t : e.s, m = dir ? moved(id, o) : moved(o, id), back = e.forwardOnly ? 0 : dir ? moved(o, id) : moved(id, o);
+    return `<span class="mono moved${m > 1e-8 ? '' : ' muted'}" title="${escapeHTML(`${SEC[mf].label} → ${SEC[mt].label}, per 10k, one possible allocation`)}">${m > 1e-8 ? fmt(m) : '0'}${back > 1e-8 ? ` <span class="muted">↩ ${fmt(back)}</span>` : ''}</span>`; };
+  const line = (e, dir) => { const o = byId[dir ? e.t : e.s]; return `<div><span class="mono">${o.id}</span><span class="mono muted" title="${escapeHTML(e.label)}">${e.rules.join(' / ')}</span><span class="mono">${tri(o)}</span>${movedCell(e, dir)}</div>`; };
+  const chains = D.chains.filter(c => c.path.includes(id) && state.rules.has(c.rule));
+  const row0 = s0 => `<tr${secs().includes(s0.key) ? '' : ' class="muted"'}><td>${secs().includes(s0.key) ? `<span class="sw" style="background:${css(secVar(s0.key))}"></span>` : '<span class="sw"></span>'}${s0.label}</td><td>${fmt(n.rate[s0.key])}</td><td>${n.count[s0.key]}</td></tr>`;
+  const allRows = D.sections.filter(x => secs().includes(x.key)).map(row0).join('') + `<tr><td colspan="3" class="subh">other sections (not charted)</td></tr>` + D.sections.filter(x => !secs().includes(x.key)).map(row0).join('');
+  // Sections follows the user's adjacent column pairs. The old fixed-HB
+  // allocation grid mixed scopes here and overflowed the narrower inspector.
+  if (state.tab === 'sections') {
+    box.innerHTML = graphAuditHTML(id, !preview) + `<div class="detail"><details class="grp"><summary>Counts for ${escapeHTML(id)}</summary><table><tr><th>Section</th><th>per 10k</th><th>tokens</th></tr>${allRows}</table></details></div>`;
+    return;
+  }
+  const mapLine = `${ins.length} incoming links · ${outs.length} outgoing links in view`;
+  box.innerHTML = `<div class="detail"><button class="wb-button" data-inspect-word="${escapeHTML(id)}">Inspect ${escapeHTML(id)} connections</button></div>` + graphAuditHTML(id, !preview) + `<div class="detail">${preview ? '<div class="muted" style="font-size:11px;margin-bottom:4px">preview \u2014 click to pin</div>' : ''}<div class="w">${id}</div><div class="note" style="margin:-4px 0 8px">${mapLine}</div>
+    <div class="jump"><a data-j="0">Counts</a><a data-j="1">Rule partners</a><a data-j="2">Frozen JA1</a><a data-j="3">Routes</a></div>
+    <details class="grp" open><summary>Counts</summary><table><tr><th></th><th>per 10k</th><th>tokens</th></tr>${allRows}</table></details>
+    <details class="grp" open><summary>Rule partners</summary>
+      <div class="edges-list"><div class="muted"><b>incoming forms</b><span>rules</span><span>${triHead()}</span><span class="moved" title="Mass moved into ${escapeHTML(id)} in the current allocation (Mass bars comparison), per 10k">moved</span></div>${ins.map(e => line(e, false)).join('') || '<div class="muted">none shown</div>'}</div>
+      <div class="edges-list"><div class="muted"><b>forward destinations</b><span>rules</span><span>${triHead()}</span><span class="moved" title="Mass moved out of ${escapeHTML(id)} in the current allocation (Mass bars comparison), per 10k">moved</span></div>${outs.map(e => line(e, true)).join('') || '<div class="muted">none shown</div>'}</div>
+      ${chains.length ? `<div class="edges-list"><div class="muted"><b>two-step chains</b></div>${chains.map(c => `<div class="mono">${c.rule}: ${c.path.join(' \u2192 ')}</div>`).join('')}</div>` : ''}</details>
+    ${(ab => `<details class="grp" open><summary>Frozen JA1 allocation into Herbal B (B0 / E1, not the active rules)</summary>${ab.alloc}</details>${ab.routes ? `<details class="grp" open><summary>Routes</summary>${ab.routes}</details>` : ''}`)(allocBlock(id))}</div>`;
+  box.querySelectorAll('#routeSeg button').forEach(b => b.onclick = () => { state.routeSet = b.dataset.v; renderDetail(id); });
+  box.querySelectorAll('.jump a').forEach(a => a.onclick = () => { const g = box.querySelectorAll('details.grp')[+a.dataset.j]; if (g) { g.open = true; g.scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
+}
+function drawKey() {
+  const k = document.getElementById('glyphKey'); k.innerHTML = '';
+  const hs = [46, 24, 10];
+  secs().forEach((s, i) => el('rect', { x: 4 + i * 17, y: 50 - hs[i], width: 12, height: hs[i], rx: 1.5, fill: css(secVar(s)) }, k));
+  el('line', { x1: 0, x2: 58, y1: 50.5, y2: 50.5, stroke: css('--line2') }, k);
+  const t = el('text', { x: 29, y: 62, 'text-anchor': 'middle', class: 'nlabel' }, k); t.textContent = 'chol';
+  document.getElementById('secKey').innerHTML = secs().map(s => `<div><span class="sw" style="background:${css(secVar(s))}"></span>${SEC[s].label} <span class="muted">(${SEC[s].N.toLocaleString()} tokens)</span></div>`).join('') +
+    `<div class="muted" style="margin-top:4px">Bars and numbers = rates per 10k (${state.scale}). <span class="mass-left">Orange: ${SHORT_POP[cmpPair()[0]]} left over.</span> <span class="mass-missing">Red: ${SHORT_POP[cmpPair()[1]]} still missing.</span> Shared-capacity example; click a word for its routes.</div>`;
+  const cnt = {}; G_cur.edges.forEach(e => { const c = mapClass(e); cnt[c] = (cnt[c] || 0) + 1; });
+  const ek = document.getElementById('edgeKey'); ek.innerHTML = '';
+  ['m11', 'm1n', 'mn1', 'mnn'].forEach(c => {
+    const sv = document.createElementNS(NS, 'svg'); sv.setAttribute('width', 44); sv.setAttribute('height', 12);
+    el('line', { x1: 2, y1: 6, x2: 42, y2: 6, class: 'edge ' + c }, sv);
+    const d = document.createElement('div'); d.innerHTML = `${MAP_TXT[c].long} <span class="muted">(${cnt[c] || 0})</span>`;
+    [sv, d].forEach(x => { x.style.cursor = 'default'; x.onmouseenter = () => highlightClass(c); x.onmouseleave = () => clearHi(); ek.appendChild(x); });
+  });
+}
+function highlightClass(c) {
+  const on = new Set(), eon = new Set();
+  G_cur.edges.forEach(e => { if (mapClass(e) === c) { on.add(e.s); on.add(e.t); eon.add(e.s + '>' + e.t); } });
+  paint(on, eon);
+}
+
+// ---------- sections tab
+state.cols = ['HA_early', 'HB_all'];
+const SCOL = { HA_early: '--secA', PharmaA: '--secM', HB_all: '--secB', HA_late: '--secL', Hand1_late: '--secH', Bio:'--secN', Stars_h3:'--m1n' };
+const S = { LW: 76, BW: 124, NW: 55, GW: 150, RH: 46, FG: 30, top: 14 };
+function renderSections() {
+  CSSV = {}; const g = visibleGraph(); G_cur = g; computeDeg(g);
+  const boxes = layout(g);
+  const cols = state.cols, CW = S.LW + S.BW + S.NW;
+  // spread the columns over the width available so the ribbons get the room
+  const avail = document.getElementById('secMain').clientWidth || 1000;
+  const GW = cols.length > 1 ? Math.max(60, Math.min(300, (avail - 40 - cols.length * CW) / (cols.length - 1))) : 100;
+  const colX = i => 16 + i * (CW + GW);
+  const smax = Math.max(1, ...g.nodes.flatMap(n => cols.map(k => byId[n].rate[k])));
+  const bw = r => r <= 0 ? 0 : (state.scale === 'lin' ? S.BW * r / smax : S.BW * Math.sqrt(r / smax));
+  // rows: families in network order, words by derivation column then network position
+  const rowY = new Map(); let y = S.top; const fams = [];
+  boxes.forEach(b => {
+    fams.push({ y, title: b.title, n: b.nodes.length, nodes:b.nodes }); y += S.FG + 8;
+    [...b.coords.entries()].sort((a, c) => a[1].x - c[1].x || a[1].y - c[1].y).forEach(([w]) => { rowY.set(w, y); y += S.RH; });
+    y += S.FG - S.RH + 8;
+  });
+  const W = colX(cols.length - 1) + CW + 24, H = y + 20;
+  const sv = document.getElementById('secSvg'); sv.innerHTML = ''; sv.setAttribute('width', W); sv.setAttribute('height', H);
+  const BG = el('g', {}, sv), LL = el('g', {}, sv), RL = el('g', {}, sv);
+  SV = { rowY, W, BG, cols };
+  fams.forEach(f => { cols.forEach((k, i) => { const t = el('text', { class: 'sfam', x: colX(i), y: f.y + 12 }, RL); t.textContent = i === 0 ? `${f.title}${f.n > 3 ? ' \u2026' : ''}  (${f.n} words)` : ''; });
+    cols.slice(1).forEach((k,i) => { el('text',{class:'family-audit',x:colX(i+1),y:f.y+12},RL).textContent=familyBadge(f.nodes,cols[i],k); });
+    el('line', { x1: 8, x2: W - 8, y1: f.y - 6, y2: f.y - 6, stroke: css('--line') }, RL); });
+  if(!g.nodes.length)el('text',{x:20,y:35,class:'flabel'},RL).textContent='No matching word. Clear search or lower the cutoff.';
+  // pairings: every single rule step, plus each defined two-step chain (C1, C4, C3) as a direct pairing, because two
+  // sections side by side may differ by both steps at once (chol in pharma pairs with chedy in Herbal B)
+  const pairs = g.edges.map(e => ({ s: e.s, t: e.t, e, two: false }));
+  const chainPairs = new Map();
+  D.chains.forEach(c => { const [a, m, o] = c.path; if (!state.rules.has(c.rule) || !rowY.has(a) || !rowY.has(o)) return;
+    const k = a + '>' + o; if (!chainPairs.has(k)) chainPairs.set(k, { s: a, t: o, two: true, e: { s: a, t: o, rules: [], via: [], label: change2(a, o) } });
+    const cp = chainPairs.get(k); if (!cp.e.rules.includes(c.rule)) cp.e.rules.push(c.rule); if (!cp.e.via.includes(m)) cp.e.via.push(m); });
+  chainPairs.forEach(cp => pairs.push(cp));
+  const sdL = new Map(), sdR = new Map();
+  pairs.forEach(p => { sdR.set(p.s, (sdR.get(p.s) || 0) + 1); sdL.set(p.t, (sdL.get(p.t) || 0) + 1); });
+  const cls = e => { const a = sdR.get(e.s) || 0, b = sdL.get(e.t) || 0; return a > 1 ? (b > 1 ? 'mnn' : 'm1n') : (b > 1 ? 'mn1' : 'm11'); };
+  // links between neighbouring columns
+  const links = [];
+  for (let i = 0; i + 1 < cols.length; i++) {
+    const X = cols[i], Y = cols[i + 1];
+    // the same word in both sections: the rate it keeps in both
+    rowY.forEach((_, w) => { const k = Math.min(byId[w].rate[X], byId[w].rate[Y]); if (k > 0) links.push({ i, from: w, to: w, cap: k, kind: 'id' }); });
+    // Deduplicate direct and composite endpoints: one assigned flow must never
+    // appear twice merely because two enabled rules license the same pairing.
+    const drawnPairs=new Set();
+    pairs.forEach(({ e, two }) => {
+      const key=[e.s,e.t].sort().join('|');if(drawnPairs.has(key))return;drawnPairs.add(key);
+      const routes=pairAudit(X,Y).routes;
+      const a=routes.find(r=>r.from===e.s&&r.to===e.t)?.mass||0, b=routes.find(r=>r.from===e.t&&r.to===e.s)?.mass||0;
+      if (a > 0) links.push({ i, from: e.s, to: e.t, cap: a, e, two, kind: 'rule' });
+      if (b > 0) links.push({ i, from: e.t, to: e.s, cap: b, e, two, kind: 'rule' });
+      if (!(a > 0) && !(b > 0)) links.push({ i, from: e.s, to: e.t, cap: 0, e, two, kind: 'zero' });
+    });
+  }
+  const lmax = Math.max(1, ...links.map(l => l.cap));
+  const IL = el('g', {}, LL), PL = el('g', {}, LL);
+  links.sort((a, b) => (a.kind === 'id' ? 0 : 1) - (b.kind === 'id' ? 0 : 1)).forEach(l => {
+    const X = cols[l.i], Y = cols[l.i + 1];
+    const x1 = colX(l.i) + CW - 4, x2 = colX(l.i + 1) + 4, y1 = rowY.get(l.from) + 6, y2 = rowY.get(l.to) + 6, dx = (x2 - x1) * 0.5;
+    const attrs = { class: 'slink ' + l.kind, d: `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}` };
+    if (l.kind === 'id') Object.assign(attrs, { stroke: css('--idl'), 'stroke-width': Math.max(0.8, 14 * l.cap / lmax) });
+    else if (l.kind === 'zero') Object.assign(attrs, { stroke: css('--' + cls(l.e)), 'stroke-width': 1, 'stroke-dasharray': l.two ? '6 3 2 3' : '2 3' });
+    else Object.assign(attrs, { stroke: css('--' + cls(l.e)), 'stroke-width': Math.max(0.8, 14 * l.cap / lmax) }, l.two ? { class: 'slink rule two', 'stroke-dasharray': '9 4' } : {});
+    const pth = el('path', attrs, l.kind === 'id' ? IL : PL);
+    pth.dataset.a = l.from; pth.dataset.b = l.to; pth.dataset.i = l.i;
+    const rX = w => byId[w].rate[X], rY = w => byId[w].rate[Y];
+    el('title', {}, pth).textContent = l.kind === 'id'
+      ? `${l.from}: ${num(rX(l.from))} per 10k in ${SEC[X].label}, ${num(rY(l.from))} in ${SEC[Y].label}; kept in both = ${num(l.cap)}`
+      : `${l.from} (${SEC[X].label}) \u2014 ${l.to} (${SEC[Y].label}): ${l.e.label}${l.two ? `  (two steps in one gap: ${l.e.rules.join(', ')} via ${l.e.via.join(' / ')})` : ''}\n${l.from} ${num(rX(l.from))} \u2192 ${num(rY(l.from))}, ${l.to} ${num(rX(l.to))} \u2192 ${num(rY(l.to))} per 10k; ` +
+        (l.kind === 'zero' ? 'no mass assigned to this pairing in this joint allocation' : `jointly allocated = ${num(l.cap)} /10k; shares source and target room with other routes`);
+  });
+  // cells: one group per (word, column), so a click or hover knows which section it is in
+  rowY.forEach((yy, w) => {
+    const n = byId[w];
+    cols.forEach((k, i) => {
+      const x0 = colX(i), cg = el('g', { class: 'scell' }, RL); cg.dataset.id = w; cg.dataset.col = i;
+      el('rect', { class: 'hit', x: x0 - 4, y: yy - 3, width: CW + 2, height: S.RH, rx: 3 }, cg);
+      const t = el('text', { class: 'wl', x: x0 + S.LW - 8, y: yy + 10, 'text-anchor': 'end' }, cg); t.textContent = w;
+      const b = bw(n.rate[k]);
+      if (b > 0) el('rect', { x: x0 + S.LW, y: yy + 1, width: b, height: 11, rx: 1.5, fill: css(SCOL[k]) }, cg);
+      else el('rect', { x: x0 + S.LW, y: yy + 11, width: 6, height: 1.2, fill: css('--line2') }, cg);
+      const c = el('text', { class: 'ct', x: x0 + S.LW + b + 5, y: yy + 10 }, cg); c.textContent = fmt(n.rate[k]);
+      // A middle column has an incoming and outgoing comparison. Separate thin
+      // stripes and text retain both checks without pretending they are one flow.
+      const outgoing=i+1<cols.length?pairAudit(k,cols[i+1]).perWord.get(w):null;
+      const incoming=i>0?pairAudit(cols[i-1],k).perWord.get(w):null;
+      if(outgoing){const width=b-bw(Math.max(0,n.rate[k]-outgoing.unplaced));if(width>0)el('rect',{class:'mass-segment',x:x0+S.LW+b-width,y:yy+1,width,height:incoming?5:11,fill:'#d99836'},cg);el('text',{class:'word-mass mass-left',x:x0+S.LW,y:yy+24},cg).textContent=`left ${fmt(outgoing.unplaced)} →`;}
+      if(incoming){const width=b-bw(Math.max(0,n.rate[k]-incoming.unfilled));if(width>0)el('rect',{class:'mass-segment',x:x0+S.LW+b-width,y:yy+(outgoing?7:1),width,height:outgoing?5:11,fill:'#d96b77'},cg);el('text',{class:'word-mass mass-missing',x:x0+S.LW,y:yy+(outgoing?37:24)},cg).textContent=`← missing ${fmt(incoming.unfilled)}`;}
+      const cell = { w, i };
+      cg.addEventListener('mouseenter', () => { secHi(cell, true); if (!state.sel) renderDetail(w, true); status(w); });
+      cg.addEventListener('mouseleave', () => { secHi(state.selCell); if (!state.sel) renderDetail(null); status(null); });
+      cg.addEventListener('click', () => { const same = state.selCell && state.selCell.w === w && state.selCell.i === i;
+        state.selCell = same ? null : cell; state.sel = same ? null : w; secHi(state.selCell); renderDetail(state.sel); });
+    });
+  });
+  // headers
+  const hd = document.getElementById('secHead'); hd.style.width = W + 'px'; hd.innerHTML = '';
+  cols.forEach((k, i) => {
+    const d = document.createElement('div'); d.className = 'colh'; d.style.left = colX(i) + 'px'; d.style.width = CW + 'px';
+    d.innerHTML = `<div class="t"><span class="sw" style="background:${css(SCOL[k])}"></span>${SEC[k].label}
+      <button data-a="l" ${i === 0 ? 'disabled' : ''}>\u25c0</button><button data-a="r" ${i === cols.length - 1 ? 'disabled' : ''}>\u25b6</button>${cols.length > 2 ? '<button data-a="x">\u00d7</button>' : ''}</div>
+      <div class="n">${SEC[k].N.toLocaleString()} tokens \u00b7 bars & numbers = per 10k</div>`;
+    d.querySelectorAll('button').forEach(b => b.onclick = () => { const a = b.dataset.a, c = state.cols;
+      if (a === 'l') [c[i - 1], c[i]] = [c[i], c[i - 1]]; else if (a === 'r') [c[i + 1], c[i]] = [c[i], c[i + 1]]; else c.splice(i, 1);
+      renderSections(); });
+    hd.appendChild(d);
+  });
+  const ks = document.createElement('div'); ks.className = 'skey';
+  ks.innerHTML = `<span><i class="ln" style="background:${css('--idl')};height:6px;opacity:.5"></i>same word, rate kept</span>
+    <span><i class="ln" style="background:${css('--m1n')};height:4px;width:14px"></i>width = jointly allocated mass (one possible allocation)</span><span class="mass-left">Orange: source left</span><span class="mass-missing">Red: target missing</span>
+    <span><i class="ln dash" style="border-color:${css('--mnn')}"></i>two-step rule in one gap</span>
+    <span><i class="ln dot" style="border-color:${css('--m11')}"></i>available pairing, no mass allocated here</span>
+`;
+  hd.appendChild(ks);
+  const rest = D.sections.map(x => x.key).filter(k => !cols.includes(k));
+  if (rest.length) {
+    const d = document.createElement('div'); d.className = 'colh'; d.style.left = (colX(cols.length - 1) + CW + 8) + 'px';
+    d.innerHTML = `<select><option value="">+ add column</option>${rest.map(k => `<option value="${k}">${SEC[k].label}</option>`).join('')}</select>`;
+    d.querySelector('select').onchange = ev => { if (ev.target.value) { state.cols.push(ev.target.value); renderSections(); } };
+    hd.appendChild(d);
+  }
+  // key
+  const cnt = {}; links.forEach(l => { if (l.kind === 'rule') { const c = cls(l.e); cnt[c] = (cnt[c] || 0) + 1; } });
+  const ek = document.getElementById('edgeKey2'); ek.innerHTML = '';
+  { const s2 = document.createElementNS(NS, 'svg'); s2.setAttribute('width', 44); s2.setAttribute('height', 12);
+    el('line', { x1: 2, y1: 6, x2: 42, y2: 6, stroke: css('--idl'), 'stroke-width': 6 }, s2); const d = document.createElement('div');
+    d.innerHTML = `<b>same word</b> <span class="muted">rate kept \u00b7 ${links.filter(l => l.kind === 'id').length} lines</span>`; ek.appendChild(s2); ek.appendChild(d);
+    const s3 = document.createElementNS(NS, 'svg'); s3.setAttribute('width', 44); s3.setAttribute('height', 12);
+    el('line', { x1: 2, y1: 6, x2: 42, y2: 6, stroke: css('--m11'), 'stroke-width': 1, 'stroke-dasharray': '2 3' }, s3); const d3 = document.createElement('div');
+    d3.innerHTML = `<b>hairline</b> <span class="muted">no mass allocated here \u00b7 ${links.filter(l => l.kind === 'zero').length} lines</span>`; ek.appendChild(s3); ek.appendChild(d3);
+    const s4 = document.createElementNS(NS, 'svg'); s4.setAttribute('width', 44); s4.setAttribute('height', 12);
+    el('line', { x1: 2, y1: 6, x2: 42, y2: 6, stroke: css('--mnn'), 'stroke-width': 3, 'stroke-dasharray': '9 4', opacity: .7 }, s4); const d4 = document.createElement('div');
+    d4.innerHTML = `<b>long dashes</b> <span class="muted">two-step rule in one gap \u00b7 ${links.filter(l => l.two && l.kind === 'rule').length} lines</span>`; ek.appendChild(s4); ek.appendChild(d4); }
+  ['m11', 'm1n', 'mn1', 'mnn'].forEach(c => { const s2 = document.createElementNS(NS, 'svg'); s2.setAttribute('width', 44); s2.setAttribute('height', 12);
+    el('line', { x1: 2, y1: 6, x2: 42, y2: 6, class: 'edge ' + c }, s2); const d = document.createElement('div'); d.innerHTML = `${MAP_TXT[c].long} <span class="muted">\u00b7 ${cnt[c] || 0} lines</span>`; ek.appendChild(s2); ek.appendChild(d); });
+  if (state.selCell && (!rowY.has(state.selCell.w) || state.selCell.i >= cols.length)) state.selCell = null;
+  state.sel = state.selCell ? state.selCell.w : null;
+  secHi(state.selCell); renderDetail(state.sel); status(null);
+}
+let SV = null;
+function change2(a, b) {
+  const U = w => w.match(/c[ktpf]h|[cs]h|eee|ee|./g) || [];
+  const u = U(a), v = U(b); let i = 0; while (i < Math.min(u.length, v.length) && u[i] === v[i]) i++;
+  let j = 0; while (j < Math.min(u.length, v.length) - i && u[u.length - 1 - j] === v[v.length - 1 - j]) j++;
+  const tail = j ? [u[u.length - j]] : [];
+  return `${u.slice(i, u.length - j).concat(tail).join('') || '\u2205'} \u2192 ${v.slice(i, v.length - j).concat(tail).join('') || '\u2205'}`;
+}
+// Trace from one cell (word in one section) along the drawn lines only: rightward through the columns to its right and
+// leftward through the columns to its left. The selected row is marked by a band drawn behind the lines.
+function secHi(cell, hover) {
+  const sv = document.getElementById('secSvg');
+  sv.querySelectorAll('.on, .sel, .hov').forEach(x => x.classList.remove('on', 'sel', 'hov'));
+  SV.BG.innerHTML = '';
+  const band = (c, cls) => { if (!c || !SV.rowY.has(c.w)) return; el('rect', { class: 'band ' + cls, x: 4, y: SV.rowY.get(c.w) - 3, width: SV.W - 8, height: S.RH, rx: 3 }, SV.BG); };
+  band(state.selCell, 'sel');
+  if (hover && cell && !(state.selCell && state.selCell.w === cell.w)) band(cell, 'hov');
+  if (!cell) { sv.classList.remove('sdim'); return; }
+  const key = (w, i) => w + '|' + i;
+  const out = new Map(), inn = new Map();
+  sv.querySelectorAll('.slink').forEach(l => { const i = +l.dataset.i;
+    const a = key(l.dataset.a, i), b = key(l.dataset.b, i + 1);
+    (out.get(a) || out.set(a, []).get(a)).push([l, l.dataset.b, i + 1]);
+    (inn.get(b) || inn.set(b, []).get(b)).push([l, l.dataset.a, i]); });
+  const onC = new Set([key(cell.w, cell.i)]), onL = new Set();
+  const walk = (m) => { let fr = [key(cell.w, cell.i)];
+    while (fr.length) { const nx = []; fr.forEach(k => (m.get(k) || []).forEach(([l, w2, i2]) => { onL.add(l); const k2 = key(w2, i2); if (!onC.has(k2)) { onC.add(k2); nx.push(k2); } })); fr = nx; } };
+  walk(out); walk(inn);
+  sv.querySelectorAll('.slink').forEach(l => l.classList.toggle('on', onL.has(l)));
+  sv.querySelectorAll('.scell').forEach(c => { const k = key(c.dataset.id, +c.dataset.col); c.classList.toggle('on', onC.has(k));
+    if (state.selCell && c.dataset.id === state.selCell.w) c.classList.add('sel');
+    if (hover && c.dataset.id === cell.w && +c.dataset.col === cell.i) c.classList.add('hov'); });
+  sv.classList.add('sdim');
+}
+
+// ---------- translate tab
+const PAGE_SEC = ['HA_early', 'PharmaA', 'HA_late', 'HB_all', 'Bio', 'Stars_h3'];
+const ADJ = new Map();           // word -> [{w, rules, label, two, via}] over every edge and chain, both directions
+D.edges.forEach(e => { (e.forwardOnly?[[e.s,e.t]]:[[e.s, e.t], [e.t, e.s]]).forEach(([a, b]) => { (ADJ.get(a) || ADJ.set(a, []).get(a)).push({ w: b, rules: e.rules.map(r => r.split('.')[0]), codes: e.rules, label: e.label, two: false }); }); });
+D.chains.forEach(c => { const [a, m, o] = c.path; [[a, o], [o, a]].forEach(([x, y]) => { (ADJ.get(x) || ADJ.set(x, []).get(x)).push({ w: y, rules: [c.rule], codes: [c.rule], label: change2(a, o), two: true, via: m }); }); });
+// forms one rule away that the corpus never attests (or only outside the graph): judged by form, never by frequency
+Object.entries(D.partners || {}).forEach(([k, lst]) => lst.forEach(e => (ADJ.get(k) || ADJ.set(k, []).get(k)).push({ w: e.w, rules: e.rules, codes: e.rules, label: e.label, two: e.two, via: e.via, hyp: true })));
+state.tr = { folio: null, from: null, to: null, view: 'best', sel: null, g2: 10.83, ratio: 4, maxN: 3, keepMax: 0.5, overlay:'none', missing:'off', ledger:'A|fit1_eval2|merged' };
+const TI=window.EchoTranslationInsights;
+// One palette for population identity: overlays, glyph analysis, mini-networks,
+// and regime charts all resolve through the section variables. Never introduce
+// a separate source/target palette inside a particular diagnostic.
+const REGIME_COLOURS=['--secA','--secM','--secB','--secN','--m1n','--secL','--secH'];
+// The Words & contexts page chart colours populations and regimes exactly as Translate does.
+window.EchoColours={population:SCOL,regime:REGIME_COLOURS};
+const regimeColour=i=>css(REGIME_COLOURS[i]);
+const populationColour=key=>css(SCOL[key]||'--muted');
+// Keep the legend and per-word explanations together. Frequency colours share
+// one scale across the selected populations; switching sides cannot rescale it.
+function translationOverlay(tok,r,maxRate) {
+  const T=state.tr, mode=T.overlay, X=T.from, Y=T.to;
+  let colour='',strength=0,text='';
+  if(mode==='source'||mode==='target') {
+    const rate=mode==='source'?r.rX:r.rY, section=mode==='source'?X:Y;
+    colour=populationColour(section);strength=TI.intensity(rate,maxRate);text=`${SEC[section].label}: ${rate.toFixed(2)} /10k${rate===0?' · unattested':''}`;
+  } else if(mode==='balance') {
+    const v=TI.balance(r.rX,r.rY);colour=populationColour(v>=0?Y:X);strength=v==null?0:Math.min(1,Math.abs(v)/4);
+    text=v==null?'Absent in both populations':`Target / source: ${v===Infinity?'source absent':v===-Infinity?'target absent':(2**v).toFixed(2)+'×'}`;
+  } else if(mode==='regime') {
+    const sc=regimeScore(tok),e=TI.regimeEvidence(sc);colour=e.ambiguous?css('--muted'):regimeColour(e.top);strength=e.ambiguous?.25:.8;
+    text=sc?`${e.label} · ${sc.order.slice(0,2).map(i=>`${RG.regimes[i].label} ${sc.weights[i].toFixed(2)}`).join(' / ')} · ${e.detail}`:'No form evidence';
+  } else if(mode==='pair') {
+    const sc=regimeScore(tok),p=formP(tok,X,Y),same=SEC2RG[X]===SEC2RG[Y];
+    colour=populationColour(p>=.5?Y:X);strength=p==null||same?0:Math.abs(p-.5)*2;
+    text=p==null?'Regime comparison unavailable':same?'Both populations map to the same regime; no directional comparison':`Pairwise target likeness: ${p.toFixed(3)} · ${TI.regimeEvidence(sc).reason||'see pairwise evidence'}`;
+  } else if(mode==='glyph') {
+    const g=TI.glyphMean(r.trans);colour=populationColour(g>=0?X:Y);strength=g==null?0:TI.intensity(Math.abs(g),100);
+    text=g==null?'No comparable glyph transitions':`Mean signed G²: ${g.toFixed(2)} · positive favours source, negative target · descriptive average of overlapping transitions`;
+  }
+  return {colour,strength,text};
+}
+function translationGap(r) {
+  const T=state.tr;
+  if(T.missing==='novelty')return {flag:r.cat==='novel'||r.wasNovel,text:'Glyph novelty: '+(r.cat==='novel'||r.wasNovel?'source-typical transitions without frequency-supported partners':'not flagged')};
+  if(T.missing==='capacity') {
+    const row=pairAudit(T.from,T.to).perWord.get(r.key),rate=row?.unplaced||0;
+    return {flag:rate>1e-8,text:`Enabled rules: ${rate.toFixed(2)} /10k source mass left in ${r.key}. One shared-capacity allocation; routes may tie.`};
+  }
+  if(T.missing==='saved') {
+    const e=TI.savedResidual(window.ECHO_WORKBENCH_DATA?.residuals[T.ledger],T.from,T.to,r.key);
+    return {flag:e.available&&e.rate>1e-8,unavailable:!e.available,text:e.available?`Saved LC1: ${e.rate.toFixed(2)} /10k source excess remaining in ${r.key}; after ${e.after.toFixed(2)}, target ${e.target.toFixed(2)}. Evaluation aggregate, not an occurrence-level missing mapping.`:e.reason};
+  }
+  return {flag:false,text:''};
+}
+function translationLegend(flagged,unknown,N) {
+  const T=state.tr;
+  const texts={none:'',source:'Rare → frequent',target:'Rare → frequent',balance:'More frequent in',regime:'Grey = short / diffuse / tied',pair:'Form favours',glyph:'Glyphs favour'};
+  const gaps={off:'',novelty:'Dots flag the glyph novelty heuristic, including words with only a form-based suggestion.',capacity:'Dots flag source mass left after a joint allocation across enabled rules. This is an optimistic capacity illustration.',saved:'Dots flag source excess in the selected frozen LC1 evaluation. This is a held-out aggregate for early Herbal A → Herbal B, independent of enabled rules and the displayed page.'};
+  document.getElementById('trLedgerCtl').hidden=T.missing!=='saved';
+  // Options use the same names as Residuals; filled once, after the workbench scripts have loaded.
+  const ledger=document.getElementById('trLedger');
+  if(!ledger.options.length&&window.EchoWorkbenchCore&&window.ECHO_WORKBENCH_DATA){ledger.innerHTML=Object.keys(ECHO_WORKBENCH_DATA.residuals).map(k=>`<option value="${escapeHTML(k)}">${escapeHTML(EchoWorkbenchCore.evalLabel(k))}</option>`).join('');ledger.value=T.ledger;}
+  const incompatible=T.missing==='saved'&&(T.from!=='HA_early'||T.to!=='HB_all');
+  const sw=(colour,label)=>`<span class="legend-item"><i style="background:${colour}"></i>${escapeHTML(label)}</span>`;
+  const colours=T.overlay==='regime'?RG.regimes.map((g,i)=>sw(regimeColour(i),g.label)).join(''):T.overlay==='none'?'':(T.overlay==='source'?[T.from]:T.overlay==='target'?[T.to]:[T.from,T.to]).map(k=>sw(populationColour(k),SEC[k].label)).join('');
+  document.getElementById('trOverlayLegend').innerHTML=`${texts[T.overlay]?`<span class="muted">${texts[T.overlay]}</span>`:''}${colours}${T.missing!=='off'?`<span class="gap-summary" title="${escapeHTML(gaps[T.missing])}">${incompatible?'LC1 unavailable for this pair':`● ${flagged}/${N} marked${unknown?' · '+unknown+' unknown':''}`}</span>`:''}`;
+  const help={none:'Choose an overlay to colour original words.',source:'Q-merged rates per 10,000 section tokens. Both populations share a colour scale; zero is unshaded.',target:'Q-merged rates per 10,000 section tokens. Both populations share a colour scale; zero is unshaded.',balance:'Colour identifies the more frequent population. Strength saturates at a 16× difference.',regime:'Form likeness includes q and holds out the word’s own occurrences. Grey marks short, diffuse, or tied evidence.',pair:'Direct comparison of source and target regimes. Same-regime comparisons are unshaded.',glyph:'Mean signed G² over overlapping transitions. A descriptive score, not a word-level significance test.'};
+  document.getElementById('trOverlayHelp').innerHTML=`<p>${help[T.overlay]}</p>${T.missing==='off'?'':`<p>${gaps[T.missing]}</p>`}`;
+}
+// ---- glyph transitions, scored exactly as apps/glyph_matrix/matrix.js does (signed Dunning G2, JS contribution)
+const GL = D.glyph, SIX = Object.fromEntries(D.sections.map((x, i) => [x.key, i]));
+const joinUnits = parts => parts.length === 1 ? parts[0] : (parts.every(x => x.length === 1) ? parts.join('') : parts.join('\u00b7'));
+const xlog2 = (x, y) => x === 0 ? 0 : x * Math.log2(x / y);
+function g2Statistic(nA, NA, nB, NB) {
+  const tot = NA + NB, c1 = nA + nB, c2 = tot - c1; if (!tot || !c1) return 0;
+  const O = [nA, NA - nA, nB, NB - nB], E = [NA * c1 / tot, NA * c2 / tot, NB * c1 / tot, NB * c2 / tot];
+  let s2 = 0; for (let i = 0; i < 4; i++) if (O[i] > 0 && E[i] > 0) s2 += O[i] * Math.log(O[i] / E[i]); return 2 * s2;
+}
+const GRAND = {};   // total transitions per context length and section (the JS context weight's denominator)
+Object.entries(GL.ctx).forEach(([k, v]) => { const n = k.split('|')[0]; GRAND[n] = GRAND[n] || v.map(() => 0); v.forEach((x, i) => GRAND[n][i] += x); });
+function wordTransitions(key, X, Y) {
+  const u = GL.wunits[key] || RG.units[key]; if (!u || !u.length || u.includes('?')) return [];
+  const iX = SIX[X], iY = SIX[Y], list = [[1, '^', u[0], 0]];
+  for (let n = 1; n <= 3; n++) for (let p0 = 0; p0 + n <= u.length; p0++) list.push([n, joinUnits(u.slice(p0, p0 + n)), p0 + n < u.length ? u[p0 + n] : '$', p0 + n]);
+  return list.filter(t => t[0] <= state.tr.maxN).map(([n, c, nx, pos]) => {
+    const tr = GL.trans[`${n}|${c}|${nx}`] || [], ct = GL.ctx[`${n}|${c}`] || [];
+    const nA = tr[iX] || 0, NA = ct[iX] || 0, nB = tr[iY] || 0, NB = ct[iY] || 0;
+    const t = { n, pos, ctx: c, next: nx, label: `${c} \u2192 ${nx}`, nA, NA, nB, NB, pA: NA ? nA / NA : null, pB: NB ? nB / NB : null, g2: null, js: null, lr: null };
+    if (t.pA === null || t.pB === null) return t;          // context unseen in one section: blank, as in the matrix app
+    const sign = t.pA - t.pB < 0 ? -1 : 1, mid = 0.5 * (t.pA + t.pB);
+    t.g2 = sign * g2Statistic(nA, NA, nB, NB);
+    t.lr = Math.log2(((nA + 0.5) / (NA + 1)) / ((nB + 0.5) / (NB + 1)));   // the matrix app's add-half smoothed log2 ratio
+    const w = 0.5 * (NA / GRAND[n][iX] + NB / GRAND[n][iY]);
+    t.js = sign * w * (mid > 0 ? 0.5 * (xlog2(t.pA, mid) + xlog2(t.pB, mid)) : 0);
+    return t;
+  });
+}
+const qsplit = t => (t.length > 1 && t[0] === 'q') ? ['q', t.slice(1)] : ['', t];
+const SEC2RG = { HA_early: 'earlyA', PharmaA: 'lateAP', HA_late: 'lateAP', Hand1_late: 'lateAP', HB_all: 'HB', Bio: 'Bio', Stars_h3: 'Stars' };
+const secRate = (w, k) => byId[w] ? byId[w].rate[k] : D.lex[w] ? 1e4 * D.lex[w][SIX[k]] / D.sections[SIX[k]].N : 0;
+const attested = w => !!(byId[w] || D.lex[w]);
+// form score of a word for a translation X -> Y: P(Y's regime beats X's regime) in their pairwise contest; when both
+// sections are the same regime, the regime-likeness weight of that regime instead
+function formP(w, X, Y) {
+  const a = RG.regimes.findIndex(g => g.key === SEC2RG[Y]), b = RG.regimes.findIndex(g => g.key === SEC2RG[X]);
+  if (a < 0 || b < 0) return null;
+  const sc = regimeScore(w); if (!sc) return null;
+  return a === b ? sc.weights[a] : sc.P[a][b];
+}
+function translateWord(key, X, Y, q = '') {
+  const parts = new Map();
+  (ADJ.get(key) || []).forEach(p => { if (!p.rules.some(r => state.rules.has(r))) return;
+    const e = parts.get(p.w) || { w: p.w, rules: new Set(), labels: new Set(), two: p.two, via: p.via, hyp: !!p.hyp }; p.rules.forEach(r => state.rules.has(r) && e.rules.add(r)); e.labels.add(p.label); if (!p.two) e.two = false; parts.set(p.w, e); });
+  const rX = w => secRate(w, X), rY = w => secRate(w, Y);
+  const fall = Math.max(0, rX(key) - rY(key));
+  const cands = [{ w: key, keep: true, weight: Math.min(rX(key), rY(key)) }];
+  parts.forEach(e => cands.push({ w: e.w, keep: false, weight: Math.min(fall, Math.max(0, rY(e.w) - rX(e.w))), rules: [...e.rules], labels: [...e.labels], two: e.two, via: e.via, unatt: !attested(e.w) }));
+  const tot = cands.reduce((a, c) => a + c.weight, 0);
+  cands.forEach(c => c.share = tot > 0 ? c.weight / tot : 0);
+  cands.sort((a, b) => b.weight - a.weight || (a.keep ? -1 : b.keep ? 1 : 0));
+  const supported = cands.filter(c => c.weight > 0);
+  let cat;
+  if (!parts.size) cat = 'none';
+  else if (!supported.length || cands[0].keep) cat = 'kept';
+  else if (supported.length === 1) cat = 'one';
+  else cat = 'multi';
+  const hasPartner = supported.some(c => !c.keep);
+  const r = novelCheck({ key, q, cat, cands, alts: cat === 'kept' && hasPartner, tot }, X, Y, hasPartner);
+  // by form: no rule partner has frequency support and the into-section keeps at most keepMax of the word, but a rule
+  // partner's form belongs to the into-section's regime (P >= .5) more than the word's own form does
+  if (!hasPartner && r.unexplained && parts.size) {
+    r.formSrc = formP(q + key, X, Y);
+    let best = null;
+    cands.forEach(c => { if (c.keep) return; c.form = formP(q + c.w, X, Y);
+      if (c.form !== null && r.formSrc !== null && c.form >= 0.5 && c.form > r.formSrc && (!best || c.form > best.form)) best = c; });
+    if (best) { r.wasNovel = r.cat === 'novel'; r.cat = 'form'; r.form = best; r.cands = [best, ...cands.filter(c => c !== best)]; }
+  }
+  return r;
+}
+// Novel = no rule partner carries weight, keeping the word accounts for at most keepMax of its from-rate, and the word
+// contains at least one glyph transition characteristic of the from-section (signed G2 >= threshold toward it).
+function novelCheck(r, X, Y, hasPartner) {
+  r.rX = secRate(r.key, X); r.rY = secRate(r.key, Y);
+  r.trans = wordTransitions(r.key, X, Y).sort((a, b) => (b.g2 ?? -1e9) - (a.g2 ?? -1e9));
+  r.trans.forEach(t => t.pass = t.g2 !== null && t.g2 >= state.tr.g2 && t.lr >= Math.log2(state.tr.ratio));
+  r.distinct = r.trans.filter(t => t.pass);
+  r.unexplained = r.rX > 0 && r.rY <= state.tr.keepMax * r.rX;
+  if (!hasPartner && r.unexplained && r.distinct.length) r.cat = 'novel';
+  return r;
+}
+// Translate's page: a new page starts with its own section as From. The ‹ › buttons and the ← / → keys step through
+// the page menu in its own order (sections, then pages).
+function setPage(folio) {
+  const pg = D.pages.find(p => p.folio === folio); state.tr.folio = folio; state.tr.from = pg.section; state.tr.to = pg.section === 'HB_all' ? 'HA_early' : 'HB_all'; state.tr.sel = null;
+  document.getElementById('trFrom').value = state.tr.from; document.getElementById('trTo').value = state.tr.to;
+}
+function stepPage(d) {
+  const f = document.getElementById('trFolio'), options = [...f.options], j = options.findIndex(o => o.value === f.value) + d;
+  if (j < 0 || j >= options.length) return;
+  f.value = options[j].value; setPage(f.value); renderTranslate();
+}
+document.addEventListener('keydown', e => {
+  if (state.tab !== 'translate' || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+  if (e.target.closest?.('input, select, textarea, [contenteditable], details[open]')) return;     // keys the control itself uses
+  e.preventDefault(); stepPage(e.key === 'ArrowLeft' ? -1 : 1);
+});
+function fillSelects() {
+  const f = document.getElementById('trFolio');
+  if (f.options.length) return;
+  PAGE_SEC.forEach(k => { const og = document.createElement('optgroup'); og.label = SEC[k].label;
+    D.pages.filter(p => p.section === k).forEach(p => { const o = document.createElement('option'); o.value = p.folio;
+      o.textContent = p.folio; o.title=`Sheet ${p.sheet}, ${p.lines.reduce((a,l)=>a+l.words.length,0)} tokens`; og.appendChild(o); });
+    if (og.children.length) f.appendChild(og); });
+  ['trFrom', 'trTo'].forEach(id => { const s2 = document.getElementById(id); D.sections.forEach(x => { const o = document.createElement('option'); o.value = x.key; o.textContent = x.label; s2.appendChild(o); }); });
+  f.onchange = () => { setPage(f.value); renderTranslate(); };
+  document.getElementById('trPrev').onclick = () => stepPage(-1);
+  document.getElementById('trNext').onclick = () => stepPage(1);
+  document.getElementById('trFrom').onchange = e => { state.tr.from = e.target.value; renderTranslate(); };
+  document.getElementById('trTo').onchange = e => { state.tr.to = e.target.value; renderTranslate(); };
+  document.getElementById('trG2').onchange = e => { state.tr.g2 = +e.target.value; renderTranslate(); };
+  document.getElementById('trRatio').onchange = e => { state.tr.ratio = +e.target.value; renderTranslate(); };
+  document.getElementById('trN').onchange = e => { state.tr.maxN = +e.target.value; renderTranslate(); };
+  document.getElementById('trKeep').onchange = e => { state.tr.keepMax = +e.target.value; renderTranslate(); };
+  for(const [id,key] of [['trOverlay','overlay'],['trMissing','missing'],['trLedger','ledger']])document.getElementById(id).onchange=e=>{state.tr[key]=e.target.value;renderTranslate();};
+  document.querySelectorAll('#trView button').forEach(b => b.onclick = () => { state.tr.view = b.dataset.v; document.querySelectorAll('#trView button').forEach(x => x.classList.toggle('on', x === b)); renderTranslate(); });
+  setPage(D.pages[0].folio); f.value = D.pages[0].folio;
+}
+function renderTranslate() {
+  CSSV = {}; fillSelects();
+  const pageMenu = [...document.getElementById('trFolio').options], at = pageMenu.findIndex(o => o.value === state.tr.folio);
+  document.getElementById('trPrev').disabled = at <= 0; document.getElementById('trNext').disabled = at >= pageMenu.length - 1;
+  const T = state.tr, pg = D.pages.find(p => p.folio === T.folio), X = T.from, Y = T.to;
+  const cache = new Map(); const tr = (key, q) => cache.get(q + '|' + key) || cache.set(q + '|' + key, translateWord(key, X, Y, q)).get(q + '|' + key);
+  const cnt = { none: 0, kept: 0, one: 0, multi: 0, form: 0, novel: 0 }; let N = 0; const classes = new Map();
+  const maxRate=Math.max(1,...[...graphWords.values()].flatMap(w=>[w.rate[X],w.rate[Y]]));
+  let flagged=0,unknown=0;
+  const insights=new Map();
+  const box = document.getElementById('trText'); box.innerHTML = '';
+  pg.lines.forEach(line => {
+    const row = document.createElement('div'); row.className = 'trLine';
+    row.innerHTML = `<div class="ln">${line.locus}</div>`;
+    const ws = document.createElement('div'); ws.className = 'trWords';
+    line.words.forEach(tok => {
+      const [q, key] = qsplit(tok), r = tr(key, q); cnt[r.cat]++; N++;
+      if (r.cat === 'novel') { const t0 = r.distinct[0]; const c0 = classes.get(t0.label) || { t: t0, n: 0, words: new Set() }; c0.n++; c0.words.add(key); classes.set(t0.label, c0); }
+      const d = document.createElement('div'); d.className = 'tw'; d.dataset.key = key;
+      const cls = r.cat === 'none' || r.cat === 'kept' ? 'kept' + (r.alts ? ' alts' : '') : r.cat;
+      let body;
+      if (T.view === 'all' && r.cands.length > 1) {
+        body = r.cands.map((c, i) => `<span class="alt${i === 0 ? ' ' + cls : ''}"${i === 0 ? ' style="font-weight:600"' : ''}>${q}${c.w}${c.unatt ? '<sup>*</sup>' : ''}<i>${r.tot > 0 ? Math.round(100 * c.share) + '%' : c.form != null ? 'form ' + c.form.toFixed(2).replace(/^0/, '') : '\u2013'}${c.keep ? ' keep' : ''}</i></span>`).join('');
+      } else body = r.cat === 'novel' ? `<span class="out nomatch" title="novel: no match in ${SEC[Y].label}">no match<sup>!</sup></span>`
+        : r.cat === 'form' ? `<span class="out form" title="rule output judged by form, no frequency support">${q}${r.cands[0].w}<sup>*</sup></span>`
+        : `<span class="out ${cls}">${q}${r.cands[0].w}${r.cat === 'one' ? '<sup>1</sup>' : r.cat === 'multi' ? `<sup>${r.cands.filter(c => c.weight > 0).length}</sup>` : ''}</span>`;
+      // Diagnostics decorate the original line only. They never rewrite a
+      // candidate share or infer which particular occurrence carries a residual.
+      const insightKey=q+'|'+key;
+      if(!insights.has(insightKey))insights.set(insightKey,{overlay:translationOverlay(tok,r,maxRate),gap:translationGap(r)});
+      const {overlay,gap}=insights.get(insightKey);if(gap.flag)flagged++;if(gap.unavailable)unknown++;
+      d.innerHTML = `<span class="src">${escapeHTML(tok)}${gap.flag?'<sup class="gap-dot" aria-label="potential mapping gap">●</sup>':gap.unavailable?'<sup class="gap-unknown" aria-label="no comparable residual evidence">?</sup>':''}</span>${body}`;
+      const src=d.querySelector('.src');src.title=[overlay.text,gap.text].filter(Boolean).join('\n');
+      if(overlay.colour&&overlay.strength>0) {src.style.background=mixHex(css('--surface').trim(),overlay.colour,.12+.5*overlay.strength);src.style.borderBottom='2px solid '+overlay.colour;}
+      d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label',tok+' · '+src.title);
+      d.onmouseenter = () => { box.querySelectorAll(`.tw[data-key="${CSS.escape(key)}"]`).forEach(x => x.classList.add('hl')); if (!T.sel) trDetail(tok, r); };
+      d.onmouseleave = () => { box.querySelectorAll('.tw.hl').forEach(x => x.classList.remove('hl')); if (!T.sel) trDetail(null); };
+      d.onclick = () => { T.sel = T.sel === key ? null : key; box.querySelectorAll('.tw').forEach(x => x.classList.toggle('sel', x.dataset.key === T.sel)); trDetail(T.sel ? tok : null, T.sel ? r : null); };
+      d.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();d.click();}};
+      if (T.sel === key) d.classList.add('sel');
+      ws.appendChild(d);
+    });
+    row.appendChild(ws); box.appendChild(row);
+  });
+  const pc = v => N ? Math.round(100 * v / N) + '%' : '';
+  translationLegend(flagged,unknown,N);
+  document.getElementById('trSum').innerHTML = `<span>${N} tokens · sheet ${pg.sheet}</span><span>Original above · candidate below</span>`;
+  document.getElementById('pageCard').innerHTML = `<div class="dh" style="border:0;margin-top:0;padding-top:0">This page <span class="muted">${pg.folio} \u00b7 ${N} tokens</span></div>
+    <table class="pstat">
+      <tr><td><span class="trk kept">unchanged</span></td><td class="n"><b>${cnt.none + cnt.kept}</b></td><td class="n muted">${pc(cnt.none + cnt.kept)}</td><td class="muted">${cnt.none} no rule, ${cnt.kept} keeping wins</td></tr>
+      <tr><td><span class="trk one">1:1<sup>1</sup></span></td><td class="n"><b>${cnt.one}</b></td><td class="n muted">${pc(cnt.one)}</td><td></td></tr>
+      <tr><td><span class="trk multi">several<sup>n</sup></span></td><td class="n"><b>${cnt.multi}</b></td><td class="n muted">${pc(cnt.multi)}</td><td></td></tr>
+      <tr><td><span class="trk form">by form<sup>*</sup></span></td><td class="n"><b>${cnt.form}</b></td><td class="n muted">${pc(cnt.form)}</td><td class="muted">rule output, no frequency support</td></tr>
+      <tr><td><span class="trk novel">novel<sup>!</sup></span></td><td class="n"><b>${cnt.novel}</b></td><td class="n muted">${pc(cnt.novel)}</td><td></td></tr>
+    </table>
+    ${classes.size ? `<div class="dh">Novel classes <span class="muted">strongest source-typical transition</span></div><table class="nctab"><tr><th>transition</th><th class="n">tokens</th><th class="n" title="times more likely in ${SEC[X].label}">ratio</th><th class="n" title="Dunning log-likelihood">G\u00b2</th><th>words</th></tr>${[...classes.values()].sort((a, b) => b.n - a.n).map(c => `<tr><td><span class="tr">${c.t.label}</span></td><td class="n">${c.n}</td><td class="n">${(2 ** c.t.lr).toFixed(1)}\u00d7</td><td class="n">${c.t.g2.toFixed(0)}</td><td class="muted wds" title="${[...c.words].join(', ')}">${[...c.words].slice(0, 2).join(', ')}${c.words.size > 2 ? ` <span class="more">+${c.words.size - 2} more</span>` : ''}</td></tr>`).join('')}</table>` : ''}`;
+  const pinned=T.sel&&pg.lines.flatMap(l=>l.words).find(t=>qsplit(t)[1]===T.sel);
+  if(pinned){const [q,key]=qsplit(pinned);trDetail(pinned,tr(key,q));}else{T.sel=null;trDetail(null);}
+}
+function mixHex(a, b, t) {
+  const h = x => [1, 3, 5].map(k => parseInt(x.slice(k, k + 2), 16));
+  const A = h(a), B = h(b); return '#' + A.map((v, k) => Math.round(v + (B[k] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+// one cell per unit plus the word end; each cell coloured by its strongest transition (max |G2|)
+function heatWord(r, X, Y, q = '') {
+  const u = GL.wunits[r.key] || RG.units[r.key];
+  if (!u || !r.trans || !r.trans.length) return { html: '<div class="muted">No transition data for this word.</div>', cells: [] };
+  const cells = u.map(x => ({ lab: x, ts: [] })).concat([{ lab: 'end', ts: [], end: true }]);
+  r.trans.forEach(t => cells[t.pos] && cells[t.pos].ts.push(t));
+  const html = `<div class="hw">` + (q ? `<span class="hc qset" title="q set aside: transitions, rules and counts use the form without q">q</span>` : '') + cells.map((c, j) => {
+    const best = c.ts.filter(t => t.g2 !== null).sort((a, b) => Math.abs(b.g2) - Math.abs(a.g2))[0];
+    let bg = css('--heat0'), strong = false;
+    if (best && Math.abs(best.g2) >= 3.84) { const k = Math.min(1, Math.abs(best.lr) / 3); bg = mixHex(css('--heat0'), css(best.lr > 0 ? SCOL[X] : SCOL[Y]), 0.2 + 0.8 * k); strong = k > 0.55; }
+    return `<span class="hc${c.ts.some(t => t.pass) ? ' pass' : ''}${c.end ? ' end' : ''}${strong ? ' strong' : ''}" data-j="${j}" style="background:${bg}">${c.lab}</span>`;
+  }).join('') + `</div>
+    <div class="hkey"><span class="ki"><span class="sw" style="background:${css(SCOL[X])}"></span>typical of ${SEC[X].label}</span><span class="ki"><span class="sw" style="background:${css(SCOL[Y])}"></span>typical of ${SEC[Y].label}</span><span class="ki"><span class="sw" style="background:${css('--heat0')};box-shadow:inset 0 0 0 1px var(--line2)"></span>no clear difference</span><span class="ki"><span class="ring"></span>passes novelty test</span></div>`;
+  return { html, cells };
+}
+function glyphBlock(ts, X, Y) {
+  const sc = ts.filter(t => t.g2 !== null), pos = sc.filter(t => t.g2 > 0), neg = sc.filter(t => t.g2 < 0);
+  const P = pos.reduce((a, t) => a + t.g2, 0), Nn = neg.reduce((a, t) => a - t.g2, 0), mx = Math.max(P, Nn, 1e-9);
+  const big = Math.max(P, Nn), small = Math.min(P, Nn);
+  const verdict = big < 10.83 ? 'no clear lean: both totals are small' : small / big > 0.8 ? `roughly balanced between ${SEC[X].label} and ${SEC[Y].label}`
+    : `leans ${P > Nn ? SEC[X].label : SEC[Y].label} (net ${P > Nn ? '+' : '\u2212'}${Math.abs(P - Nn).toFixed(0)})`;
+  const cX = css(SCOL[X] || '--secA'), cY = css(SCOL[Y] || '--secB');
+  const rows = sc.slice().sort((a, b) => b.g2 - a.g2).concat(ts.filter(t => t.g2 === null));
+  const gm = Math.max(1e-9, ...sc.map(t => Math.abs(t.g2)));
+  const cnt = (n, N) => N ? `${n}/${N}` : 'unseen';
+  return `<div class="gdiv"><div class="gside l"><span style="width:${100 * P / mx}%;background:${cX}"></span></div><div class="gside r"><span style="width:${100 * Nn / mx}%;background:${cY}"></span></div></div>
+    <div class="gdl"><span>toward ${SEC[X].label} <b>+${P.toFixed(0)}</b> <span class="muted">${pos.length} transition${pos.length === 1 ? '' : 's'}</span></span><span>toward ${SEC[Y].label} <b>\u2212${Nn.toFixed(0)}</b> <span class="muted">${neg.length}</span></span></div>
+    <div class="gverd">${verdict} <span class="muted">\u00b7 sum of signed G\u00b2 over the word's transitions (contexts of 1\u2013${state.tr.maxN} glyph units)</span></div>
+    <details class="gx"><summary>All ${ts.length} transitions</summary>
+    <div class="gtabw"><table class="gtab"><tr><th style="text-align:left">transition</th><th style="text-align:left" title="+ = typical of ${SEC[X].label}, \u2212 = typical of ${SEC[Y].label}">signed G\u00b2</th><th>ratio</th><th class="muted wrap" title="${SEC[X].label}: context then next / context total">${SEC[X].label}</th><th class="muted wrap" title="${SEC[Y].label}: context then next / context total">${SEC[Y].label}</th><th class="muted" title="share of the Jensen-Shannon divergence, millibits">JS</th></tr>
+    ${rows.map(t => `<tr data-pos="${t.pos}"${t.pass ? ' class="passrow"' : ''}><td style="text-align:left" class="mono">${t.label}</td>
+      <td style="text-align:left">${t.g2 === null ? '<span class="muted">not scored (unseen)</span>' : `<svg class="g2bar" width="64" height="10" viewBox="0 0 64 10">${t.g2 > 0 ? `<rect x="${(32 - 31 * t.g2 / gm).toFixed(1)}" y="1" width="${(31 * t.g2 / gm).toFixed(1)}" height="8" fill="${cX}"/>` : `<rect x="32" y="1" width="${(-31 * t.g2 / gm).toFixed(1)}" height="8" fill="${cY}"/>`}<line x1="32" x2="32" y1="0" y2="10" stroke="${css('--ink2')}" stroke-width="1"/></svg> ${t.g2 > 0 ? '+' : '\u2212'}${Math.abs(t.g2).toFixed(1)}`}</td>
+      <td>${t.lr === null ? '\u2013' : (2 ** t.lr).toFixed(1) + '\u00d7'}</td><td class="muted">${cnt(t.nA, t.NA)}</td><td class="muted">${cnt(t.nB, t.NB)}</td><td class="muted">${t.js === null ? '\u2013' : (1000 * t.js).toFixed(2)}</td></tr>`).join('')}</table></div>
+    <div class="muted" style="font-size:11px">Counts: times the context is followed by that unit, out of all uses of the context. Framed rows pass the novelty test (G\u00b2 and ratio thresholds). While this list is open, hovering a letter above highlights its transitions.</div></details>`;
+}
+function hwRows(c, X, Y) {
+  if (!c) return '';
+  const pc = (n, N, k) => N ? `<span style="color:${css(secTxt(k))}">${(100 * n / N).toFixed(1)}%</span> <small class="muted">${n}/${N}</small>` : '<span class="muted">unseen</span>';
+  return `<table class="cand"><tr><th style="text-align:left">transition</th><th>${SEC[X].label}</th><th>${SEC[Y].label}</th><th>ratio</th><th>G\u00b2</th><th style="white-space:nowrap" title="share of the Jensen-Shannon divergence between the two sections, in millibits">JS (mbit)</th></tr>
+    ${c.ts.sort((a, b) => a.n - b.n).map(t => `<tr${t.pass ? ' class="passrow"' : ''}><td style="text-align:left">${t.label}</td><td>${pc(t.nA, t.NA, X)}</td><td>${pc(t.nB, t.NB, Y)}</td>
+      <td>${t.lr === null ? '\u2013' : (2 ** t.lr).toFixed(1) + '\u00d7'}</td><td>${t.g2 === null ? '\u2013' : t.g2.toFixed(1)}</td><td>${t.js === null ? '\u2013' : (1000 * t.js).toFixed(2)}</td></tr>`).join('')}</table>`;
+}
+// the rule network around a word: partners within two steps under the enabled rules, bars = from / into sections
+function miniNet(key, X, Y, q = '') {
+  const edges = D.edges.filter(e => e.rules.some(r => state.rules.has(r.split('.')[0])));
+  const nb = new Map(); edges.forEach(e => { [[e.s, e.t], [e.t, e.s]].forEach(([a, b]) => (nb.get(a) || nb.set(a, []).get(a)).push(b)); });
+  const tot = w => byId[w] ? byId[w].total : 0;
+  const on = new Set([key]); let fr = [key];
+  for (let d = 0; d < 2; d++) { const nx = []; fr.forEach(w => (nb.get(w) || []).slice().sort((a, b) => tot(b) - tot(a)).forEach(v => { if (!on.has(v) && on.size < 16) { on.add(v); nx.push(v); } })); fr = nx; }
+  if (on.size < 2 || !byId[key]) return '<div class="muted">No rule partners under the enabled rules.</div>';
+  const es = edges.filter(e => on.has(e.s) && on.has(e.t));
+  const b = layout({ nodes: [...on], edges: es }).find(bx => bx.nodes.includes(key));
+  const SX = 0.7, SY = 0.62, BW = 14, GP = 12, MB = 38, GW = 2 * BW + GP;
+  const P = new Map(); b.coords.forEach((p, w) => P.set(w, { x: 28 + p.x * SX, y: 38 + MB + p.y * SY }));
+  const W = Math.max(...[...P.values()].map(p => p.x)) + GW + 60, H = Math.max(...[...P.values()].map(p => p.y)) + 44;
+  const mx = Math.max(1, ...[...on].map(w => Math.max(byId[w].rate[X], byId[w].rate[Y])));
+  let svgs = '';
+  es.forEach(e => { if (!P.has(e.s) || !P.has(e.t)) return; const a = P.get(e.s), c = P.get(e.t);
+    const x1 = a.x + GW + 3, y1 = a.y - MB / 2 - 8, x2 = c.x - 4, y2 = c.y - MB / 2 - 8, dx = Math.max(20, (x2 - x1) / 2);
+    const mxp = (x1 + x2) / 2, myp = (y1 + y2) / 2;
+    svgs += `<path d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}" fill="none" stroke="${css('--m11')}" stroke-width="1.2" opacity=".7"/>
+      <g class="pill"><rect x="${mxp - e.label.length * 3.1 - 5}" y="${myp - 7}" width="${e.label.length * 6.2 + 10}" height="13" rx="6.5"/><text x="${mxp}" y="${myp + 3}" text-anchor="middle">${e.label}</text></g>`; });
+  P.forEach((p, w) => { const n = byId[w];
+    const h = k => n.rate[k] > 0 ? Math.max(2, MB * (state.scale === 'lin' ? n.rate[k] / mx : Math.sqrt(n.rate[k] / mx))) : 0;
+    svgs += `<g class="mnode${w === key ? ' me' : ''}" data-w="${w}" transform="translate(${p.x},${p.y})">
+      <rect class="hit" x="${GW / 2 - Math.max(GW + 16, 6.6 * Math.max(w.length, (n.count[X] + " · " + n.count[Y]).length) + 10) / 2}" y="${-MB - 18}" width="${Math.max(GW + 16, 6.6 * Math.max(w.length, (n.count[X] + " · " + n.count[Y]).length) + 10)}" height="${MB + 36}" rx="5"/>
+      <rect x="0" y="${-h(X)}" width="${BW}" height="${h(X)}" rx="1.5" fill="${css(SCOL[X] || '--secA')}"/>
+      <rect x="${BW + GP}" y="${-h(Y)}" width="${BW}" height="${h(Y)}" rx="1.5" fill="${css(SCOL[Y] || '--secB')}"/>
+      <line x1="-2" x2="${GW + 2}" y1="0.5" y2="0.5" stroke="${css('--line2')}"/>
+      <text class="nlabel" x="${GW / 2}" y="13" text-anchor="middle">${q ? `<tspan class="qm">(${q})</tspan>` : ''}${w}</text>
+      <text class="bnum" x="${BW / 2}" y="${-h(X) - 5}" text-anchor="middle" fill="${css(n.count[X] ? secTxt(X) : '--muted')}">${n.count[X]}</text>
+      <text class="bnum" x="${BW + GP + BW / 2}" y="${-h(Y) - 5}" text-anchor="middle" fill="${css(n.count[Y] ? secTxt(Y) : '--muted')}">${n.count[Y]}</text></g>`; });
+  return `<svg class="mini" viewBox="0 0 ${W} ${H}" width="100%">${svgs}</svg>
+    <div class="hkey"><span class="sw" style="background:${css(SCOL[X] || '--secA')}"></span>${SEC[X].label}<span class="sw" style="background:${css(SCOL[Y] || '--secB')};margin-left:10px"></span>${SEC[Y].label}<span class="muted" style="margin-left:10px">bars: the from and into sections only${q ? ', counted with and without q' : ''} \u00b7 click a word to open it</span></div>`;
+}
+
+// ---------- regime likeness (METRIC_regime_likeness spec; counts and calibration from regime_likeness.py)
+// word -> transitions of ^ u1..uk $ (1st and 2nd order) -> per regime pair: mean signed G2 with the word held out ->
+// per-pair logistic -> rank centrality over the 7 regimes
+const RG = D.regime, RGN = RG.regimes.length;
+const RG_INV = ['cth', 'ckh', 'cph', 'cfh', 'eee', 'iii', 'ch', 'sh', 'ee', 'ii', 'q', 's', 'd', 'o', 'y', 'l', 'r', 'k', 't', 'p', 'f', 'e', 'a', 'i', 'm', 'n'];
+const RG_CAL = {}; RG.cal.forEach(([i, j, a, b]) => { RG_CAL[i + ',' + j] = [a, b]; });
+function rgUnits(w) {
+  if (RG.units[w]) return RG.units[w];
+  const out = []; let i = 0;   // the spec's fallback: greedy longest match over the 26-unit inventory
+  while (i < w.length) { const u = RG_INV.find(x => w.startsWith(x, i)); if (!u) return null; out.push(u); i += u.length; }
+  return out;
+}
+function rgFeatures(u) {
+  const s = ['^', ...u, '$'], f1 = [], f2 = [];
+  for (let i = 0; i < s.length - 1; i++) f1.push(s[i] + '|' + s[i + 1]);
+  for (let i = 0; i < s.length - 2; i++) f2.push(s[i] + '|' + s[i + 1] + '|' + s[i + 2]);
+  return [f1, f2];
+}
+function signedG2(oa, ob, NA, NB) {
+  if (oa + ob <= 0 || NA <= 0 || NB <= 0) return 0;
+  const ea = (oa + ob) * NA / (NA + NB), eb = (oa + ob) * NB / (NA + NB);
+  const g = 2 * ((oa > 0 ? oa * Math.log(oa / ea) : 0) + (ob > 0 ? ob * Math.log(ob / eb) : 0));
+  return oa / NA >= ob / NB ? g : -g;
+}
+// Counts and calibration are immutable for this export. Cache complete scores
+// by raw spelling (including q); recolouring a page must not refit 21 pairs.
+const regimeScoreCache=new Map();
+function regimeScore(w) {
+  if(regimeScoreCache.has(w))return regimeScoreCache.get(w);
+  const u = rgUnits(w); if (!u || !u.length) return null;
+  const F = rgFeatures(u), own = RG.words[w] || new Array(RGN).fill(0), cells = [RG.cells1, RG.cells2];
+  const keyO = (o, i, j) => { const fs = F[o], fc = {}; fs.forEach(c => { fc[c] = (fc[c] || 0) + 1; });
+    const NA = RG.N[o][i] - own[i] * fs.length, NB = RG.N[o][j] - own[j] * fs.length; let t = 0;
+    fs.forEach(c => { const row = cells[o][c]; t += signedG2((row ? row[i] : 0) - own[i] * fc[c], (row ? row[j] : 0) - own[j] * fc[c], NA, NB); });
+    return t / fs.length; };
+  const pair = {};   // pair[i][j] for i < j: key1, key2, key, P(i)
+  const P = [...Array(RGN)].map(() => new Array(RGN).fill(0.5));
+  for (let i = 0; i < RGN; i++) for (let j = i + 1; j < RGN; j++) {
+    const k1 = keyO(0, i, j), k2 = keyO(1, i, j), k = 0.5 * k1 + 0.5 * k2, [a, b] = RG_CAL[i + ',' + j];
+    const p = Math.min(1 - 1e-3, Math.max(1e-3, 1 / (1 + Math.exp(-(a * k + b)))));
+    pair[i + ',' + j] = { k1, k2, k, p }; P[i][j] = p; P[j][i] = 1 - p;
+  }
+  const M = [...Array(RGN)].map((_, i) => { const r = new Array(RGN).fill(0); for (let j = 0; j < RGN; j++) if (j !== i) r[j] = P[j][i] / RGN; r[i] = 1 - r.reduce((x, y) => x + y, 0); return r; });
+  let p = new Array(RGN).fill(1 / RGN);
+  for (let it = 0; it < 300; it++) { const q = p.map((_, j) => p.reduce((acc, pi, i) => acc + pi * M[i][j], 0)); const d = Math.max(...q.map((x, k) => Math.abs(x - p[k]))); p = q; if (d < 1e-13) break; }
+  const sm = p.reduce((x, y) => x + y, 0); p = p.map(x => x / sm);
+  const order = p.map((x, i) => i).sort((a, b) => p[b] - p[a]);
+  const H = -p.reduce((acc, x) => acc + (x > 0 ? x * Math.log(x) : 0), 0);
+  const result={ w, u, own, weights: p, order, P, pair, conc: 1 - H / Math.log(RGN), margin: p[order[0]] - p[order[1]] };
+  regimeScoreCache.set(w,result);return result;
+}
+window.regimeScore = regimeScore;   // console access, e.g. for checking against D.regime.check
+function regimeBlock(sc, pageRegime) {
+  if (!sc) return `<div class="muted">This word cannot be split into the 26 units.</div>`;
+  const L = i => RG.regimes[i].label, own = RG.regimes.findIndex(x => x.key === pageRegime);
+  const rank = own >= 0 ? sc.order.indexOf(own) + 1 : 0, top = sc.order[0], mx = Math.max(...sc.weights);
+  const ordinal = n => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+  const evidence=TI.regimeEvidence(sc), verdict=evidence.label;
+  const tied = sc.order.filter(i => sc.weights[top] - sc.weights[i] < 0.02), d3 = v => v.toFixed(sc.margin < 0.01 ? 3 : 2);
+  const bars = RG.regimes.map((g, i) => `<div class="rgrow${i === top ? ' top' : ''}${i === own ? ' own' : ''}" data-i="${i}"><span class="rgl">${g.label}${i === own ? ' <span class="rgown" title="the regime this page is in">page</span>' : ''}</span>
+      <span class="rgb"><span style="width:${100 * sc.weights[i] / mx}%;background:${regimeColour(i)}"></span></span><span class="rgv">${d3(sc.weights[i])}</span></div>`).join('');
+  const hd = RG.regimes.map((g, j) => `<th title="${g.label}">${g.label.split(' ')[0].replace('Herbal', 'HB').replace('early', 'eA').replace('late', 'lAP').replace('Celestial', 'Cel')}</th>`).join('');
+  const mat = RG.regimes.map((g, i) => `<tr><th class="rh">${g.label}</th>${RG.regimes.map((_, j) => {
+    if (i === j) return '<td class="dg"></td>';
+    const v = sc.P[i][j], t = Math.abs(v - 0.5) * 2, col = regimeColour(v >= 0.5 ? i : j);
+    return `<td data-i="${i}" data-j="${j}" style="background:${mixHex(css('--heat0'), col, 0.12 + 0.88 * t)}${t > 0.6 ? ';color:#fff' : ''}">${v.toFixed(2).replace(/^0/, '')}</td>`; }).join('')}</tr>`).join('');
+  return `<div class="rgsum">${tied.length > 1 ? `<b>Near tie:</b> ${tied.map(i => `${L(i)} ${d3(sc.weights[i])}`).join(' \u2248 ')} <span class="muted">· ${verdict}</span>`
+      : `<b>${L(top)}</b> ${sc.weights[top].toFixed(2)} <span class="muted">\u00b7 ${verdict}</span>`}
+      <div class="muted" title="${escapeHTML(evidence.detail)}" tabindex="0" aria-label="${escapeHTML(evidence.detail)}">Top-two gap ${sc.margin.toFixed(3)} · concentration ${sc.conc.toFixed(3)}</div>
+      ${own >= 0 ? `<div class="muted">Page regime (${L(own)}): ${ordinal(rank)} of ${RGN}, ${sc.weights[own].toFixed(2)}</div>` : ''}
+      ${sc.u.length < 3 ? `<div class="rgwarn">${sc.u.length}-unit word: too short to carry much signal.</div>` : ''}</div>
+    <div class="rgbars">${bars}</div>
+    <div class="rgmh">Pairwise: P(row beats column) <span class="muted">· colour = favoured regime · hover a cell</span></div>
+    <table class="rgmat"><tr><th></th>${hd}</tr>${mat}</table>
+    <div class="rginfo" id="rgInfo"></div>
+    <div class="muted rgfoot">${sc.u.join(' \u00b7 ')} \u00b7 ${sc.own.reduce((a, b) => a + b, 0)} own tokens held out \u00b7 uniform likeness ${(1 / RGN).toFixed(2)}. Weights describe relative form likeness, not section-membership probabilities. Token-split calibration has not established performance on unseen sheets.</div>`;
+}
+function regimeInfo(sc, i, j) {
+  if (i === null) return '';
+  const a = Math.min(i, j), b = Math.max(i, j), c = sc.pair[a + ',' + b], sg = i === a ? 1 : -1, L = k => RG.regimes[k].label;
+  const f = v => (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(0), lean = v => v >= 0 ? L(i) : L(j);
+  const p = sc.P[i][j], win = p >= 0.5 ? i : j, lose = win === i ? j : i, pw = Math.max(p, 1 - p);
+  const head = pw < 0.55 ? `<b>Near tie:</b> ${L(win)} ${pw.toFixed(2)} vs ${L(lose)} ${(1 - pw).toFixed(2)}`
+    : `<b>${L(win)}</b> ahead: ${pw.toFixed(2)} vs ${L(lose)} ${(1 - pw).toFixed(2)}`;
+  // the overall weights use all 21 contests, so they can order two regimes differently from their head-to-head
+  const others = k => { const o = [...Array(RGN).keys()].filter(x => x !== i && x !== j); return o.reduce((acc, x) => acc + sc.P[k][x], 0) / o.length; };
+  const flip = (sc.weights[win] < sc.weights[lose]) ? `<div class="muted">Overall, ${L(lose)} still ranks higher (${sc.weights[lose].toFixed(3)} vs ${sc.weights[win].toFixed(3)}): it wins more against the other five regimes (average P ${others(lose).toFixed(2)} vs ${others(win).toFixed(2)}).</div>` : '';
+  return `${head} <span class="muted">(the outlined cell and its mirror)</span>${flip}
+    <div class="muted">Mean signed G\u00b2: unit pairs favour ${lean(sg * c.k1)} (${f(sg * c.k1)}), triples favour ${lean(sg * c.k2)} (${f(sg * c.k2)}); average ${f(sg * c.k)}, against a calibrated tie point of ${f(sg * (-RG_CAL[a + ',' + b][1] / RG_CAL[a + ',' + b][0]))} (not 0).</div>`;
+}
+function trDetail(tok, r) {
+  const box = document.getElementById('detail3'), T = state.tr, X = T.from, Y = T.to;
+  if (!tok) { box.innerHTML = `<div class="detail"><div class="muted">Hover or click a word.</div></div>`; return; }
+  const [q, key] = qsplit(tok);
+  const iX = SIX[X], iY = SIX[Y];
+  const lexRate = (w, i) => 1e4 * D.lex[w][i] / D.sections[i].N;
+  const rate = w => byId[w] ? `${fmt(byId[w].rate[X])} \u2192 ${fmt(byId[w].rate[Y])}` : D.lex[w] ? `${fmt(lexRate(w, iX))} \u2192 ${fmt(lexRate(w, iY))}` : '0 \u2192 0';
+  const cnts = w => byId[w] ? `${byId[w].count[X]} \u2192 ${byId[w].count[Y]}` : D.lex[w] ? `${D.lex[w][iX]} \u2192 ${D.lex[w][iY]}` : '0 \u2192 0';
+  const chip = { none: ['kept', 'unchanged'], kept: ['kept', 'unchanged'], one: ['one', '1:1<sup>1</sup>'], multi: ['multi', `several<sup>${r.cands.filter(c => c.weight > 0).length}</sup>`], form: ['form', 'by form<sup>*</sup>'], novel: ['novel', 'novel<sup>!</sup>'] }[r.cat];
+  const why = { none: 'no rule applies', kept: r.alts ? 'keeping wins; alternatives exist' : 'keeping wins', one: 'one supported candidate', multi: 'several supported candidates',
+    form: r.form ? `no rule partner rises in ${SEC[Y].label} \u00b7 form score (regime likeness): rule output ${q}${r.form.w} ${r.form.form.toFixed(2)}, original ${tok} ${(r.formSrc || 0).toFixed(2)}${r.wasNovel ? ' \u00b7 also flagged novel by the glyph test' : ''}` : '',
+    novel: `${SEC[Y].label} keeps ${r.rX > 0 ? Math.round(100 * r.rY / r.rX) : 0}% \u00b7 ${r.distinct.length} source-typical transition${r.distinct.length === 1 ? '' : 's'}` }[r.cat];
+  const waWords = [key, ...r.cands.filter(c => !c.keep).map(c => c.w)].slice(0, 8);
+  if (T.awFor !== tok || !waWords.includes(T.aw)) { T.aw = key; T.awFor = tok; }
+  box.innerHTML = `<div class="detail"><div class="w">${tok}</div>
+    <div class="tr-evidence-note">${escapeHTML(translationOverlay(tok,r,1).text)}${state.tr.missing!=='off'?`<p>${escapeHTML(translationGap(r).text)}</p>`:''}</div>
+    <div class="whead"><span class="trk ${chip[0]}">${chip[1]}</span><span class="muted">${why}${q ? ' \u00b7 q set aside' : ''}${r.note ? ' \u00b7 ' + r.note : ''}</span></div>
+    <div class="dh">Candidates</div>
+    <div class="trTableScroll"><table class="cand cand2"><tr><th style="text-align:left">word</th><th style="text-align:left">rule</th><th>share</th><th title="${SEC[X].label} \u2192 ${SEC[Y].label}">per 10k <span style="color:${css(secTxt(X))}">A</span>\u2192<span style="color:${css(secTxt(Y))}">B</span></th><th title="${SEC[X].label} \u2192 ${SEC[Y].label}">tokens <span style="color:${css(secTxt(X))}">A</span>\u2192<span style="color:${css(secTxt(Y))}">B</span></th><th title="regime likeness of the form: P(${SEC[Y].label} regime beats ${SEC[X].label} regime)">form score</th></tr>
+    ${r.cands.map(c => `<tr><td style="text-align:left">${q}${c.w}${c.keep ? ' <span class="muted">unchanged</span>' : ''}${c.unatt ? ' <span class="muted" title="not attested anywhere in the corpus">*unattested</span>' : ''}</td><td style="text-align:left" class="muted" title="${c.keep ? 'keep the word' : c.labels.join(' / ') + (c.two ? ' via ' + c.via : '')}">${c.keep ? 'keep' : `<span class="code">${c.rules.join('+')}</span> ${c.labels[0]}`}</td>
+      <td title="weight ${num(c.weight)} per 10k"><div class="sbar"><div style="width:${100 * c.share}%"></div></div>${r.tot > 0 ? (c.share > 0 && c.share < 0.005 ? '<1%' : Math.round(100 * c.share) + '%') : '\u2013'}</td><td>${rate(c.w)}</td><td>${cnts(c.w)}</td><td>${(v => v == null ? '\u2013' : v.toFixed(2))(c.form != null ? c.form : formP(q + c.w, X, Y))}</td></tr>`).join('')}</table></div>
+    <div class="dh">Word analysis <span class="muted">form only \u00b7 pick a word</span></div>
+    <div class="wsel" id="waSel">${waWords.map(w => `<button data-w="${w}" class="${w === T.aw ? 'on' : ''}">${q}${w}<i>${w === key ? 'source' : w === r.cands[0].w ? 'shown' : 'candidate'}</i></button>`).join('')}</div>
+    <div id="waBox"></div>
+    <div class="dh">Rule network</div>
+    ${miniNet(key, X, Y, q)}</div>`;
+  const pg = D.pages.find(x => x.folio === T.folio);
+  const drawWA = () => {
+    const w = T.aw, wb = box.querySelector('#waBox');
+    const ts = wordTransitions(w, X, Y); ts.forEach(t => t.pass = t.g2 !== null && t.g2 >= T.g2 && t.lr >= Math.log2(T.ratio));
+    const hw = heatWord({ key: w, trans: ts }, X, Y, q), sc = regimeScore(q + w);
+    wb.innerHTML = `<div class="wsub">Glyph divergence <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">${SEC[X].label} vs ${SEC[Y].label}</span></div>
+      ${hw.html}${ts.length ? glyphBlock(ts, X, Y) : ''}
+      <div class="wsub">Regime likeness <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">7 regimes, word held out</span></div>
+      <div id="rgBox">${regimeBlock(sc, pg && pg.regime)}</div>`;
+    const rows = [...wb.querySelectorAll('.gtab tr[data-pos]')];
+    wb.querySelectorAll('.hc[data-j]').forEach(e => { e.onmouseenter = () => { rows.forEach(tr => tr.classList.toggle('hl', tr.dataset.pos === e.dataset.j)); e.classList.add('on'); };
+      e.onmouseleave = () => { rows.forEach(tr => tr.classList.remove('hl')); e.classList.remove('on'); }; });
+    if (!sc) return;
+    const rb = wb.querySelector('#rgBox'), ri = rb.querySelector('#rgInfo'), best = sc.order[0], second = sc.order[1];
+    const showRg = (i, j) => { rb.querySelectorAll('.rgmat td[data-i]').forEach(td => { td.classList.toggle('on', +td.dataset.i === i && +td.dataset.j === j); td.classList.toggle('mir', +td.dataset.i === j && +td.dataset.j === i); }); ri.innerHTML = regimeInfo(sc, i, j); };
+    rb.querySelectorAll('.rgmat td[data-i]').forEach(td => { td.onmouseenter = () => showRg(+td.dataset.i, +td.dataset.j); td.onmouseleave = () => showRg(best, second); });
+    showRg(best, second);
+  };
+  drawWA();
+  box.querySelectorAll('#waSel button').forEach(b => b.onclick = () => { T.aw = b.dataset.w; box.querySelectorAll('#waSel button').forEach(x => x.classList.toggle('on', x === b)); drawWA(); });
+  box.querySelectorAll('.mnode').forEach(g => g.onclick = () => { const w = g.dataset.w; T.sel = w;
+    document.querySelectorAll('#trText .tw').forEach(x => x.classList.toggle('sel', x.dataset.key === w));
+    trDetail(q + w, translateWord(w, X, Y, q)); });
+}
+
+// ---------- rules tab
+function renderRules() { ruleManager.mount(document.getElementById('rulesPage')); }
+state.tab = 'net';
+document.getElementById('gloss').innerHTML = `<div class="gh"><b>Glossary</b><button class="chip" id="glossX">close</button></div><dl class="kv"><dt>per 10k</dt><dd>Rate per 10,000 tokens of that section, so sections of different size compare.</dd><dt>tokens</dt><dd>Raw count of the word in that section.</dd><dt>q-merged</dt><dd>One leading q is removed before counting; q is treated as a state.</dd><dt>left / right partner</dt><dd>A word one rule step away, without (left) or with (right) the added e or d.</dd><dt>two-step rule</dt><dd>C1, C4, C3: two single steps through a middle word.</dd><dt>demand</dt><dd>How much more often Herbal B writes a word than the source section (per 10k).</dd><dt>excess</dt><dd>How much more often the source section writes a word than Herbal B (per 10k).</dd><dt>B0 / E1</dt><dd>Rule sets. B0: the two published rules. E1: B0 plus C1, C3, C4, B1, S4.</dd><dt>pairs</dt><dd>Word pairs the rule links in a test.</dd><dt>monotone</dt><dd>Pairs where the source falls and the output rises.</dd><dt>transfer</dt><dd>Output gain divided by source loss; 1 means the mass balances.</dd><dt>attested</dt><dd>Share of the rule’s outputs (fwd) or inputs (rev) that are real words.</dd><dt>retention</dt><dd>Share of source tokens still written in Herbal B.</dd><dt>G²</dt><dd>Dunning log-likelihood keyness; 10.83 means p < .001.</dd><dt>ratio</dt><dd>How many times more likely a transition is in the from section.</dd><dt>JS (mbit)</dt><dd>A transition’s share of the Jensen–Shannon divergence between the two sections.</dd><dt>context</dt><dd>Number of letters before the transition (1–3, Zattera units).</dd><dt>kept ≤</dt><dd>The into section keeps at most this share of the word’s rate.</dd><dt>one-to-one · one → several · several → one</dt><dd>How many partners each word of a pair has on that side.</dd></dl>`;
+document.getElementById('glossBtn').onclick = () => { const g = document.getElementById('gloss'); g.hidden = !g.hidden; };
+document.getElementById('glossX').onclick = () => { document.getElementById('gloss').hidden = true; };
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  window.EchoWorkbench?.leave(); window.EchoStages?.leave();
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-current', x === t ? 'page' : 'false'));
+  state.tab = t.dataset.tab; state.sel = null; state.selCell = null;
+  const app = document.querySelector('.app');
+  const workbench = ['residuals', 'distribution', 'contexts', 'lab', 'stages'].includes(state.tab);
+  app.classList.toggle('workbenchMode', workbench);
+  document.getElementById('workbenchPage').hidden = !workbench;
+  const intro = document.getElementById('legacyIntro'); intro.hidden = workbench || state.tab === 'rules';
+  const intros = {net:['04 / Follow the correspondences','Rule network','Explore connected forms. Family labels and bar segments follow the comparison chosen in Mass bars; the sidebar always shows all three legs.'], sections:['05 / Compare populations','Across sections','Read frequency shifts between adjacent populations. Family accounting follows the column order and enabled rules.'], translate:['06 / Read a dialect projection','Translate Voynichese','Inspect interlinear alternatives and the evidence behind each suggested form.'], rules:['07 / Inspect the evidence','Rule manager','Definitions, licenses, population-specific findings, and the limits of each correspondence.']};
+  if(!workbench){const [k,h,p]=intros[state.tab];intro.innerHTML=`<div class="wb-eyebrow">${k}</div><h2>${h}</h2><p>${p}</p>`;}
+  app.classList.toggle('rulesMode', state.tab === 'rules'); app.classList.toggle('secMode', state.tab === 'sections'); app.classList.toggle('trMode', state.tab === 'translate');
+  document.getElementById('trPage').hidden = state.tab !== 'translate';
+  document.getElementById('rulesPage').hidden = state.tab !== 'rules';
+  document.getElementById('secPage').hidden = state.tab !== 'sections';
+  if (state.tab === 'stages') window.EchoStages?.show(document.getElementById('workbenchPage')); else if (workbench) window.EchoWorkbench?.show(state.tab); else if (state.tab === 'rules') renderRules(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else { draw.fitted = false; draw(); }
+});
+function redraw() { if (state.tab === 'stages') window.EchoStages?.refresh(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else if (state.tab === 'net') draw(); }
+// Menus float above the reading area; expanding help must not move the text.
+document.addEventListener('pointerdown',e=>{if(state.tab==='translate')document.querySelectorAll('.trOptions[open],#ruleMenu[open]').forEach(d=>{if(!d.contains(e.target))d.open=false;});});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.tab==='translate')document.querySelectorAll('.trOptions[open],#ruleMenu[open]').forEach(d=>{d.open=false;d.querySelector('summary').focus();});});
+
+// ---------- pan / zoom
+let drag = null, moved = false;
+svg.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; moved = false; svg.classList.add('drag'); });
+window.addEventListener('mousemove', e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 3) moved = true; view.x = drag.vx + dx; view.y = drag.vy + dy; applyView(); });
+window.addEventListener('mouseup', () => { drag = null; svg.classList.remove('drag'); setTimeout(() => moved = false, 0); });
+svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+function zoomAt(px, py, f) { const k = Math.min(4, Math.max(0.15, view.k * f)); view.x = px - (px - view.x) * k / view.k; view.y = py - (py - view.y) * k / view.k; view.k = k; applyView(); }
+document.getElementById('zin').onclick = () => zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1.25);
+document.getElementById('zout').onclick = () => zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 0.8);
+document.getElementById('zfit').onclick = fit;
+function fit() {
+  if (!lastBox) return; const W = svg.clientWidth, H = svg.clientHeight;
+  // An incident-only search should open on its requested word, not an incoming
+  // peripheral form at the top of a tall component. Pan/zoom remains available.
+  const focus=state.query.replace(/^q/,'');
+  if(state.findMode==='direct'&&focus&&nodesPos.has(focus)){view.k=.8;const p=nodesPos.get(focus);view.x=W/2-(p.x+G.glyphW/2)*view.k;view.y=H/2-(p.y-20)*view.k;applyView();return;}
+  view.k = Math.max(0.5, Math.min(1.1, (W - 40) / (lastBox.w + 20)));
+  view.x = 20; view.y = 16 + 34 * view.k; applyView();
+}
+function centerOn(p) { view.k = Math.max(view.k, 1); view.x = svg.clientWidth / 2 - (p.x + G.glyphW / 2) * view.k; view.y = svg.clientHeight / 2 - (p.y - 30) * view.k; applyView(); }
+
+// ---------- export
+document.getElementById('dl').onclick = () => {
+  const src = state.tab === 'sections' ? document.getElementById('secSvg') : svg;
+  const clone = src.cloneNode(true); clone.setAttribute('width', src.clientWidth || src.getAttribute('width')); clone.setAttribute('height', src.clientHeight || src.getAttribute('height'));
+  const st = document.createElementNS(NS, 'style'); st.textContent = [...document.styleSheets].map(s => { try { return [...s.cssRules].map(r => r.cssText).join('\n'); } catch (e) { return ''; } }).join('\n');
+  clone.insertBefore(st, clone.firstChild);
+  const bg = document.createElementNS(NS, 'rect'); bg.setAttribute('width', '100%'); bg.setAttribute('height', '100%'); bg.setAttribute('fill', css('--surface')); clone.insertBefore(bg, clone.firstChild);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' })); a.download = 'echo_rule_network.svg'; a.click();
+};
+window.addEventListener('resize', () => { if (state.tab === 'net') { draw.fitted = false; draw(); } });
+draw();
+})();
+</script>
+<script src="workbench_data.js?v=9eff70fcff"></script>
+<script src="manuscript_data.js?v=5a4b98f56d"></script>
+<script src="stage_data.js?v=35826460f3"></script>
+<script src="fit_data.js?v=edce679302"></script>
+<script src="fit_core.js?v=be9d504f5f"></script>
+<script src="workbench_core.js?v=d585203b1f"></script>
+<script src="page_chart.js?v=2e100d01a5"></script>
+<script src="context_statistics.js?v=147218c350"></script>
+<script src="workbench.js?v=b1642e4c64"></script>
+<script src="stage_flow.js?v=406aae70f1"></script>
+<script src="stage_view.js?v=d815509c89"></script>
+</body>
+</html>
