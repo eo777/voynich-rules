@@ -231,7 +231,7 @@
       if (my !== ticket || !host) return;
       try {
         const m = model(), h = m.members.length ? heavy(m) : null;
-        host.innerHTML = `<div class="wb-wrap"><div class="wb-heading"><div><div class="wb-eyebrow">Intermediate sections</div><h2>Stages</h2><p>Compare each leg on its own, then one linked allocation from source through the middle to the target.</p></div></div>
+        host.innerHTML = `<div class="wb-wrap"><div class="wb-heading"><div><div class="wb-eyebrow">Intermediate sections</div><h2>Stages</h2><p>Compare each leg on its own, then one linked allocation from source through the middle to the target.</p></div><button class="wb-button" data-share="stages" title="Copy a link that opens this chart with these settings">Share link</button></div>
           ${controls(m)}
           ${h ? populationsCard() + ledgerCard(h) + linkedCard(h) + classCard(h) + pathsCard(m) + membersCard(m, h) + familiesCard(h) + pfCard(m) : membersCard(m, {linked: {}})}</div>`;
         bind();
@@ -256,6 +256,14 @@
     show(el) { host = el; render(); },
     leave() { host = null; ticket++; },
     refresh() { if (host) render(); },
-    focus(word) { state.scope = 'family'; state.word = word; state.sel = word; }
+    focus(word) { state.scope = 'family'; state.word = word; state.sel = word; },
+    // links (view_state.js): this view's settings by link parameter, and back
+    view() { return {src: state.src, mid: state.mid, tgt: state.tgt, scope: state.scope, word: state.scope === 'family' ? state.word : '', gallows: state.cls, exchange: state.exchange, routes: state.mode, sel: state.sel || ''}; },
+    applyView(p) {
+      const V = root.EchoViewState, R = V.read, pops = app().data.sections.map(s => s.key);
+      return V.assign(state, p, {src: ['src', v => R.oneOf(v, pops)], mid: ['mid', v => R.oneOf(v, MIDS.map(m => m[0]))], tgt: ['tgt', v => R.oneOf(v, pops)],
+        scope: ['scope', v => R.oneOf(v, ['all', 'family'])], word: ['word', v => R.text(v, 40)], gallows: ['cls', v => R.oneOf(v, CLASSES.map(c => c[0]))],
+        exchange: ['exchange', v => R.oneOf(v, ['none', 'first', 'second', 'both'])], routes: ['mode', v => R.oneOf(v, ['both', 'staged', 'direct'])], sel: ['sel', v => R.text(v, 40)]}).length;
+    }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

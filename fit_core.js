@@ -64,8 +64,10 @@
     return out;
   }
   // Hits of the active rules on one word: original rules from fit_data (output, front), catalog families from the
-  // catalog menus (all their outputs, front 'all').
-  function hitMaker(active, fitData, catalogKnown) {
+  // catalog menus (all their outputs, front 'all'). A composed output (catalogRoutes, e.g. ed+GEDY_AR) counts only
+  // when every rule of one of its routes is active.
+  function hitMaker(active, fitData, catalogKnown, catalogRoutes) {
+    const R = typeof module !== 'undefined' && module.exports ? require('./rule_manager.js') : root.EchoRuleManager;
     const original = new Set(fitData.rules), cache = new Map();
     return word => {
       if (!cache.has(word)) {
@@ -73,7 +75,7 @@
         for (const [rule, o, front] of fitData.hits[word] || []) if (active.has(rule)) out.push({rule, outs: [o], front});
         for (const code of active) {
           if (original.has(code)) continue;
-          const outs = (catalogKnown && catalogKnown[code] && catalogKnown[code][word] || []).filter(o => o !== word);
+          const outs = catalogKnown ? R.outputs({known: catalogKnown, routes: catalogRoutes}, code, word, active).filter(o => o !== word) : [];
           if (outs.length) out.push({rule: code, outs, front: 'all'});
         }
         cache.set(word, out);
@@ -205,8 +207,8 @@
   }
 
   // One evaluation: fit on one sheet half, score in-sample and on the held-out half.
-  function heldOut({lines, sheets, active, fitData, catalogKnown, solve, from = 'HA_early', to = 'HB_all', collapse = false}) {
-    const hitsOf = hitMaker(active, fitData, catalogKnown), cfg = {weights: fitData.weights, minSupport: fitData.min_support, tieEps: fitData.tie_eps};
+  function heldOut({lines, sheets, active, fitData, catalogKnown, catalogRoutes, solve, from = 'HA_early', to = 'HB_all', collapse = false}) {
+    const hitsOf = hitMaker(active, fitData, catalogKnown, catalogRoutes), cfg = {weights: fitData.weights, minSupport: fitData.min_support, tieEps: fitData.tie_eps};
     const block = s => ({countsA: blockCounts(lines, from, new Set(s.sheets_A), collapse), countsB: blockCounts(lines, to, new Set(s.sheets_B), collapse)});
     const fitBlock = block(sheets.fit), evalBlock = block(sheets.eval);
     const {theta, diag} = fit({...fitBlock, hitsOf, solve, ...cfg});

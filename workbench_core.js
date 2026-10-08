@@ -8,27 +8,123 @@
   const core = word => word && word.replace(/^q/, '');
   const add = (map, key, value) => map.set(key, (map.get(key) || 0) + value);
   const sum = map => [...map.values()].reduce((a, b) => a + b, 0);
-  function pattern(query = '') {
+  // Word patterns. A term is a glob over the whole spelling: * = any letters, ? = one character, every other
+  // character is itself; no user-supplied regular expression is ever run. Terms combine with ordinary logic:
+  // NOT (!) binds tightest, then AND (&), then OR (|), and parentheses group. NOT applies to the whole term or
+  // bracketed group after it, never to one character. Operator words are capitals only, because lowercase or is
+  // a Voynich word. A term ends at a space, an operator symbol or a parenthesis. A missing neighbor (line start or
+  // end, unreadable gap) matches no term, so *y and NOT *y split every occurrence, exactly like Only / Exclude on
+  // the -y group, and * AND NOT *y also requires a readable word.
+  // A term may start with an offset and a colon: -1:*k* tests the word before the match, 1:*k* the word after, -2:
+  // two words before, and so on along the line, as the Previous / Next word boxes do (no crossing of a line end or an
+  // unreadable gap). Such terms need the text around a match: occurrencePattern() evaluates them, while pattern(),
+  // which matches one word, refuses them.
+  const OPERATORS = {'&': 'AND', '|': 'OR', '!': 'NOT', AND: 'AND', OR: 'OR', NOT: 'NOT'};
+  function parsePattern(query = '') {
+    query = String(query ?? '');
     if (query.length > 160) throw new Error('Keep patterns under 160 characters.');
-    // A bounded glob grammar avoids executing user-supplied regular expressions.
-    // Alternatives are ORed; one starting with ! excludes. A word matches when it matches a plain alternative (or
-    // there is none) and no excluded one. A missing neighbor (line start or end, unreadable gap) matches no
-    // alternative, so *y and !*y split every occurrence, exactly like Only / Exclude on the -y group; *|!*y
-    // additionally requires a readable word.
-    const alternatives = query.trim().split('|').map(s => s.trim());
-    const include = alternatives.filter(p => !p.startsWith('!')), exclude = alternatives.filter(p => p.startsWith('!')).map(p => p.slice(1).trim());
-    function glob(p, word) {
-      // Dynamic programming keeps even adversarial *a*a*... patterns bounded.
-      let row = [true, ...Array(word.length).fill(false)];
-      for (const ch of p) {
-        const next = [ch === '*' && row[0]];
-        for (let j = 1; j <= word.length; j++) next[j] = ch === '*' ? row[j] || next[j-1] : row[j-1] && (ch === '?' || ch === word[j-1]);
-        row = next;
-      }
-      return row[word.length];
+    const tokens = [];
+    for (let i = 0; i < query.length;) {
+      const ch = query[i];
+      if (/\s/.test(ch)) { i++; continue; }
+      if ('()&|!'.includes(ch)) { tokens.push(ch === '(' || ch === ')' ? {t: ch} : {t: 'op', v: OPERATORS[ch]}); i++; continue; }
+      let j = i; while (j < query.length && !/[\s()&|!]/.test(query[j])) j++;
+      const text = query.slice(i, j); i = j;
+      if (/^(AND|OR|NOT)$/.test(text)) { tokens.push({t: 'op', v: text}); continue; }
+      const at = /^([+-]?\d+):(.*)$/.exec(text);
+      if (at && !at[2]) throw new Error(`"${text}" needs a pattern after the colon.`);
+      tokens.push({t: 'term', v: at ? at[2] : text, offset: at ? Number(at[1]) || 0 : 0, text});
     }
-    const hit = (p, word) => word != null && glob(p, word);
-    return word => !query.trim() || ((!include.length || include.some(p => hit(p, word))) && !exclude.some(p => hit(p, word)));
+    if (!tokens.length) return null;
+    let k = 0;
+    const peek = () => tokens[k], isOp = v => peek()?.t === 'op' && peek().v === v;
+    const name = tok => tok.t === 'term' ? `"${tok.text}"` : tok.t === 'op' ? tok.v : 'a parenthesis';
+    function primary() {
+      const tok = peek();
+      if (!tok) throw new Error(tokens[k - 1].t === '(' ? 'A parenthesis is not closed.' : `${tokens[k - 1].v} needs a pattern after it.`);
+      if (tok.t === 'term') { k++; return {t: 'term', v: tok.v, offset: tok.offset, text: tok.text}; }
+      if (tok.t === '(') {
+        k++; if (peek()?.t === ')') throw new Error('The parentheses are empty.');
+        const inner = or(); if (peek()?.t !== ')') throw new Error('A parenthesis is not closed.');
+        k++; return inner;
+      }
+      if (tok.t === ')') throw new Error('A closing parenthesis has no opening one.');
+      throw new Error(`${tok.v} needs a pattern before it.`);
+    }
+    function not() { if (isOp('NOT')) { k++; return {t: 'not', a: not()}; } return primary(); }
+    function and() { let a = not(); while (isOp('AND')) { k++; a = {t: 'and', a, b: not()}; } return a; }
+    function or() { let a = and(); while (isOp('OR')) { k++; a = {t: 'or', a, b: and()}; } return a; }
+    const tree = or();
+    if (k < tokens.length) {
+      const tok = tokens[k], before = tokens[k - 1];
+      if (tok.t === ')') throw new Error('A closing parenthesis has no opening one.');
+      // "chol or chor" (or "chol or" while typing): a lowercase operator word after a pattern was meant as the operator
+      if (tok.t === 'term' && /^(and|or|not)$/i.test(tok.text)) throw new Error(`Write ${tok.text.toUpperCase()} in capitals; "${tok.text}" is searched as a word.`);
+      throw new Error(`Put AND/OR between ${name(before)} and ${name(tok)}.`);
+    }
+    return tree;
+  }
+  function glob(p, word) {
+    // Dynamic programming keeps even adversarial *a*a*... patterns bounded.
+    let row = [true, ...Array(word.length).fill(false)];
+    for (const ch of p) {
+      const next = [ch === '*' && row[0]];
+      for (let j = 1; j <= word.length; j++) next[j] = ch === '*' ? row[j] || next[j-1] : row[j-1] && (ch === '?' || ch === word[j-1]);
+      row = next;
+    }
+    return row[word.length];
+  }
+  // One compiler for both matchers: `term` turns a term node into a test of the matched thing (a word, or an
+  // occurrence with the text around it).
+  function compileTree(node, term) {
+    if (!node) return () => true;
+    if (node.t === 'term') return term(node);
+    if (node.t === 'not') { const a = compileTree(node.a, term); return x => !a(x); }
+    const a = compileTree(node.a, term), b = compileTree(node.b, term);
+    return node.t === 'and' ? x => a(x) && b(x) : x => a(x) || b(x);
+  }
+  // Matches one word. Offset terms need the words around a match, which a single word does not have.
+  function pattern(query = '') {
+    return compileTree(parsePattern(query), node => {
+      if (node.offset) throw new Error(`This box matches one word: write "${node.v}" without "${node.offset}:".`);
+      return word => word != null && glob(node.v, word);
+    });
+  }
+  // The word `offset` places from an occurrence along its line, in the occurrence's spelling view (q merged or not);
+  // null at a line end or past an unreadable gap.
+  function wordAt(o, offset) {
+    if (!offset) return o.word;
+    const words = o.line.words, step = offset < 0 ? -1 : 1, target = o.index + offset;
+    for (let i = o.index + step; ; i += step) {
+      if (i < 0 || i >= words.length || !words[i]) return null;
+      if (i === target) return o.mergeQ ? core(words[i]) : words[i];
+    }
+  }
+  // Matches an occurrence: a term without an offset tests its word, -1:… the word before it, and so on.
+  function occurrencePattern(query = '') {
+    return compileTree(parsePattern(query), node => o => { const word = wordAt(o, node.offset); return word != null && glob(node.v, word); });
+  }
+  // The pattern with its grouping written out: NOT's scope always in parentheses, and a group of one operator
+  // inside the other in parentheses. '' for an empty pattern.
+  function describePattern(query = '') {
+    const flat = (n, t) => n.t === t ? [...flat(n.a, t), ...flat(n.b, t)] : [n];
+    const show = (n, parent) => {
+      if (n.t === 'term') return n.offset ? `${n.offset}:${n.v}` : n.v;
+      if (n.t === 'not') return `NOT (${show(n.a, null)})`;
+      const text = flat(n, n.t).map(c => show(c, n.t)).join(n.t === 'and' ? ' AND ' : ' OR ');
+      return parent ? `(${text})` : text;
+    };
+    const tree = parsePattern(query);
+    return tree ? show(tree, null) : '';
+  }
+  function patternTerms(query = '') {
+    const out = [], walk = n => { if (!n) return; if (n.t === 'term') out.push(n.v); else { walk(n.a); walk(n.b); } };
+    walk(parsePattern(query)); return out;
+  }
+  // The exact spelling a pattern names, or '' when it uses wildcards or operators (or does not parse).
+  function literalWord(query = '') {
+    try { const tree = parsePattern(query); return tree && tree.t === 'term' && !tree.offset && !/[*?]/.test(tree.v) ? tree.v : ''; }
+    catch { return ''; }
   }
   function occurrences(lines, section = 'all', mergeQ = true) {
     const spelling=mergeQ?core:word=>word;
@@ -58,7 +154,7 @@
     return row[b.length];
   }
   function search(items, config) {
-    const matches = pattern(config.query), context = conditions(config);
+    const matches = occurrencePattern(config.query), context = conditions(config);
     const query = (config.query || '').trim();
     // Exclude focus occurrences only; never remove text or reconnect neighbors.
     const merge=config.mergeQ??items[0]?.mergeQ??true, spelling=merge?core:word=>word;
@@ -77,7 +173,7 @@
     return items.filter(o => !excluded.has(o.word) && context(o) && only.every(([side, keep]) => keep.has(neighborWord(o, side, merge))) && inGroups(o) &&
       (!config.folio || o.line.folio === config.folio) &&
       (!config.sheet || o.line.sheet === config.sheet) &&
-      (config.mode === 'related' && query ? distance(o.word, spelling(query)) <= 2 : matches(o.word)));
+      (config.mode === 'related' && query ? distance(o.word, spelling(query)) <= 2 : matches(o)));
   }
   // Descriptive, disjoint spelling buckets, not inferred glyphs or morphemes.
   // The occurrence view controls whether the spelling retains initial q.
@@ -132,11 +228,17 @@
     const selected=selectedTotal?count/selectedTotal:0,baseline=sectionTotal?baselineCount/sectionTotal:0;
     return {selected,baseline,lift:baseline>0?selected/baseline:null,per10k:sectionTotal?count/sectionTotal*10000:0};
   }
-  function compile(rule, known) {
+  // routes (the catalog's, optional) list composed outputs such as ed+GEDY_AR; such an output is offered only when
+  // the same run also applies every other catalog rule it needs (codes).
+  function compile(rule, known, routes = null, codes = new Set()) {
     if (!Number.isFinite(rule.fraction) || rule.fraction < 0 || rule.fraction > 1) throw new Error('Every application fraction must be between 0 and 100%.');
     const context = conditions(rule);
     if (rule.kind === 'known') {
       if (!Object.hasOwn(known, rule.code)) throw new Error('Unknown catalog rule code.');
+      if (routes) {
+        const R = typeof module !== 'undefined' && module.exports ? require('./rule_manager.js') : root.EchoRuleManager;
+        return o => context(o) ? R.outputs({known, routes}, rule.code, o.word, codes) : null;
+      }
       return o => context(o) ? known[rule.code][o.word] : null;
     }
     if (!['exact', 'prefix', 'suffix', 'contains'].includes(rule.kind)) throw new Error('Choose a supported spelling edit.');
@@ -164,9 +266,10 @@
     });
     return {rows, gained, lost, net: gained - lost, overlapBefore, overlapAfter};
   }
-  function simulate(source, target, rules, known = {}) {
+  function simulate(source, target, rules, known = {}, catalogRoutes = null) {
     if (rules.length > 30) throw new Error('Use at most 30 rules per experiment.');
-    const active = rules.filter(r => r.enabled !== false).map(r => ({rule: r, edit: compile(r, known)}));
+    const codes = new Set(rules.filter(r => r.enabled !== false && r.kind === 'known').map(r => r.code));
+    const active = rules.filter(r => r.enabled !== false).map(r => ({rule: r, edit: compile(r, known, catalogRoutes, codes)}));
     const before = counts(source), after = new Map(), examples = [], routes = new Map();
     const support = new Set(), sheets = new Set(); let moved = 0, matched = 0;
     for (const o of source) {
@@ -217,7 +320,9 @@
     const p = evalParts(key);
     return p ? `Sheet split ${p.split}: fitted on half ${p.fit}, tested on half ${p.test}` : String(key);
   }
-  const api = {core, pattern, occurrences, conditions, distance, search, neighborClass, neighborWord, filterNeighbors, keepNeighbors, neighborSummary, rateComparison, counts, score, simulate, populationCounts, qVariants, evalParts, evalLabel};
+  // Which loci each scope of the search covers: running text is prose, circles and radii; labels are separate.
+  const LOCI = {running: ['para', 'circle', 'radial'], all: ['para', 'circle', 'radial', 'label'], para: ['para'], label: ['label'], circle: ['circle'], radial: ['radial']};
+  const api = {LOCI, core, pattern, occurrencePattern, wordAt, parsePattern, describePattern, patternTerms, literalWord, occurrences, conditions, distance, search, neighborClass, neighborWord, filterNeighbors, keepNeighbors, neighborSummary, rateComparison, counts, score, simulate, populationCounts, qVariants, evalParts, evalLabel};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.EchoWorkbenchCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

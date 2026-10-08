@@ -9,8 +9,9 @@
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function links(data,active){
     const out=[];
-    for(const e of data.edges)for(const code of e.rules)if(active.has(code.split('.')[0]))out.push({s:e.s,t:e.t,code,rule:code.split('.')[0],forwardOnly:!!e.forwardOnly,via:null});
-    for(const c of data.chains)if(active.has(c.rule))out.push({s:c.path[0],t:c.path[2],code:c.rule,rule:c.rule,forwardOnly:false,via:c.path[1]});
+    // rules: every rule the code needs (a composed route needs all of them; removing any one removes the link)
+    for(const e of data.edges)for(const code of e.rules)if(G.ruleLive(code,active))out.push({s:e.s,t:e.t,code,rules:G.ruleParts(code),forwardOnly:!!e.forwardOnly,via:null});
+    for(const c of data.chains)if(active.has(c.rule))out.push({s:c.path[0],t:c.path[2],code:c.rule,rules:[c.rule],forwardOnly:false,via:c.path[1]});
     return out;
   }
   function adjacency(edges){
@@ -36,9 +37,9 @@
     const incoming=new Set(incident.filter(e=>e.t===word).map(e=>e.s));
     const scoped=edges.filter(e=>members.has(e.s));
     function impact(codes){
-      const excluded=new Set(codes),kept=scoped.filter(e=>!excluded.has(e.rule));
+      const excluded=new Set(codes),gone=e=>e.rules.some(r=>excluded.has(r)),kept=scoped.filter(e=>!gone(e));
       const remaining=G.closure([word],adjacency(kept));
-      const removed=scoped.filter(e=>excluded.has(e.rule));
+      const removed=scoped.filter(gone);
       const hubs=new Map();
       for(const e of removed){if(!hubs.has(e.t))hubs.set(e.t,new Set());hubs.get(e.t).add(e.s);}
       return {remaining:remaining.size,detached:members.size-remaining.size,links:removed.length,
@@ -57,8 +58,9 @@
     document.body.append(dialog);const close=()=>{dialog.close();dialog.remove();};
     dialog.querySelector('[data-ci="close"]').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
     const input=dialog.querySelector('input'),body=dialog.querySelector('.ci-body');let target='',model;
-    const badge=code=>{const r=info.get(code.split('.')[0]),tier=root.EchoRuleManager.tier(r);return `<span class="rm-evidence rm-evidence-${tier}">${esc(code)} · ${root.EchoRuleManager.TIERS[tier]}</span>`;};
-    const route=e=>`<b class="mono">${esc(e.s)} → ${esc(e.t)}</b> ${badge(e.code)}${e.via?` <small>via ${esc(e.via)} · declared composition</small>`:e.code.includes('.')?' <small>declared step</small>':''}`;
+    // a composed route carries the weakest confidence of the rules it needs
+    const badge=code=>{const tier=root.EchoRuleManager.weakest(G.ruleParts(code).map(c=>info.get(c)));return `<span class="rm-evidence rm-evidence-${tier}">${esc(code)} · ${root.EchoRuleManager.TIERS[tier]}</span>`;};
+    const route=e=>`<b class="mono">${esc(e.s)} → ${esc(e.t)}</b> ${badge(e.code)}${e.via?` <small>via ${esc(e.via)} · declared composition</small>`:e.code.includes('+')?' <small>composed: needs every rule named</small>':e.code.includes('.')?' <small>declared step</small>':''}`;
     function renderPath(){
       const host=body.querySelector('.ci-path');if(!target){host.innerHTML='';return;}
       const p=path(model.edges,word,target);
@@ -77,7 +79,7 @@
       const sorted=model.rules.sort((a,b)=>b.detached-a.detached||b.links-a.links);
       body.innerHTML=!known?'<p>Word not in the q-merged graph inventory.</p>':`<p class="ci-summary"><b>${model.outgoing.size}</b> forward destinations · <b>${model.incoming.size}</b> incoming forms · <b>${model.members.size}</b> connected forms</p>
         <p class="wb-small">Connected forms share rule paths; they are not equivalent words. Counts include forms below the chart cutoff.</p>
-        <div class="ci-direct"><section><h3>Forward destinations</h3>${directList(true)}</section><section><h3>Incoming forms</h3>${directList(false)}</section></div>
+        <div class="ci-direct"><section><h3>Forward destinations · ${model.outgoing.size}</h3>${directList(true)}</section><section><h3>Incoming forms · ${model.incoming.size}</h3>${directList(false)}</section></div>
         <section><h3>Why are two words connected?</h3><input aria-label="Compare connected word" placeholder="e.g. shol" value="${esc(target)}" list="ciWords"><datalist id="ciWords">${[...model.members].sort().map(w=>`<option value="${esc(w)}">`).join('')}</datalist><div class="ci-path"></div></section>
         <section><h3>Which rules enlarge this component?</h3><p class="wb-small">“Disconnects” counts forms lost from ${esc(word)}’s component if that rule or family is removed alone. Overlapping rules can hide each other’s effect; uncheck several to compare together.</p>
         <div class="ci-family">${model.groups.map(g=>`<button class="wb-button" data-group="${esc(g.group)}" title="Preview disabling this family">− ${esc(g.group)} <b>${g.detached}</b></button>`).join('')}</div>

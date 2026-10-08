@@ -1,0 +1,22 @@
+/* Colour tokens for the light and dark themes, shared by network.html and viewer.html. */
+:root {
+  color-scheme: light;
+  --bg: #f7f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #8a8984; --line: #e4e2dc; --line2: #d3d1ca;
+  --secA: #2a78d6; --secM: #eb6834; --secB: #1baf7a;
+  --rgW: #2a78d6; --rgL: #eb6834; --rgLA: #774f12; --rgBX: #b13d75;--secAt: #1c5cab; --secMt: #b0461c; --secBt: #0c7a53; --secN: #8894a8; --m11: #52514e; --m1n: #4a3aa7; --mn1: #d55181; --mnn: #a3a19b; --tr1: #3b3a37; --tr1bg: rgba(82,81,78,.24); --trm: #4a3aa7; --trmbg: rgba(74,58,167,.13); --trn: #e34948; --trnbg: rgba(227,73,72,.13); --secL: #eda100; --secH: #e87ba4; --idl: #b3b0a8; --heat0: #f0efec; --heatA: #e34948; --heatB: #2a78d6;
+  --edgeE: #a3a19b; --edgeD: #5d5b57; --hi: #0b0b0b; --pill: #ffffff; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #8f8e87; --line: #2c2c2a; --line2: #3a3a37;
+    --secA: #3987e5; --secM: #d95926; --secB: #199e70;
+    --rgW: #3987e5; --rgL: #e0703f; --rgLA: #e1bd92; --rgBX: #47dcfd;--secAt: #86b6ef; --secMt: #f0a07c; --secBt: #5fd0a3; --secN: #8f9bb0; --m11: #c3c2b7; --m1n: #9085e9; --mn1: #d55181; --mnn: #8f8e87; --tr1: #c3c2b7; --tr1bg: rgba(195,194,183,.16); --trm: #9085e9; --trmbg: rgba(144,133,233,.2); --trn: #e66767; --trnbg: rgba(230,103,103,.2); --secL: #c98500; --secH: #d55181; --idl: #5e5d58; --heat0: #383835; --heatA: #e66767; --heatB: #3987e5; --edgeE: #8f8e87; --edgeD: #c3c2b7; --hi: #ffffff; --pill: #232322; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #8f8e87; --line: #2c2c2a; --line2: #3a3a37;
+  --secA: #3987e5; --secM: #d95926; --secB: #199e70;
+  --rgW: #3987e5; --rgL: #e0703f; --rgLA: #e1bd92; --rgBX: #47dcfd;--secAt: #86b6ef; --secMt: #f0a07c; --secBt: #5fd0a3; --secN: #8f9bb0; --m11: #c3c2b7; --m1n: #9085e9; --mn1: #d55181; --mnn: #8f8e87; --tr1: #c3c2b7; --tr1bg: rgba(195,194,183,.16); --trm: #9085e9; --trmbg: rgba(144,133,233,.2); --trn: #e66767; --trnbg: rgba(230,103,103,.2); --secL: #c98500; --secH: #d55181; --idl: #5e5d58; --heat0: #383835; --heatA: #e66767; --heatB: #3987e5; --edgeE: #8f8e87; --edgeD: #c3c2b7; --hi: #ffffff; --pill: #232322; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+}

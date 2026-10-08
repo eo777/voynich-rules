@@ -81,6 +81,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .wb-context .mono { line-height: 1.9; overflow-wrap: anywhere; }
 .wb-context mark { background: var(--accent-soft); color: var(--accent); border-radius: 3px; padding: 3px 5px; }
 .wb-link { color: var(--accent); }
+/* a chart opened from a shared link is outlined for a moment */
+.share-target { outline: 2px solid var(--accent); outline-offset: 4px; }
 .wb-bar { height: 5px; background: var(--line); border-radius: 3px; margin: 5px 0 9px; }
 .wb-bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .wb-rule { border: 1px solid var(--line2); border-radius: 8px; padding: 15px; margin: 10px 0; }
@@ -101,6 +103,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .legacy-intro { padding:18px 28px 16px; flex-shrink:0; }
 .legacy-intro h2 { font-size:25px; font-weight:500; letter-spacing:-.6px; margin:0 0 5px; }
 .legacy-intro p { margin:0; color:var(--ink2); font-size:12px; }
+.intro-row { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; }
+.page-chart > summary .pc-share { margin-left:auto; align-self:center; }
 .controls { padding:12px 28px; gap:12px 22px; background:var(--surface); }
 .controls .ctl { font-size:12px; flex-wrap:wrap; max-width:100%; }
 .gbar .ctl.theme { flex-wrap:wrap; gap:8px; }
@@ -260,11 +264,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .rm-title input { width:17px; height:17px; accent-color:var(--accent); flex-shrink:0; }
 .rm-pattern { color:var(--ink2); font-size:12px; margin-top:4px; overflow-wrap:anywhere; }
 .rm-evidence { font-size:11px; font-weight:650; padding:4px 8px; border:1px solid currentColor; border-radius:5px; white-space:nowrap; }
-.rm-evidence-published { color:var(--accent); }
-.rm-evidence-supported { color:var(--ink); border-style:dotted; }
-.rm-evidence-experimental { color:#cf942f; background:#cf942f12; }
-.rm-evidence-reference { color:var(--muted); border-style:dashed; }
-.rm-experimental { border-left:3px solid #cf942f; }
+/* confidence (ECHO_RULES.md): Rule, Theory, Hypothesis; Mixed for containers; Not rated */
+.rm-evidence-rule { color:var(--accent); background:transparent; background:color-mix(in srgb, var(--accent) 9%, transparent); }
+.rm-evidence-mixed { color:var(--ink); border-style:dotted; }
+.rm-evidence-theory { color:#cf942f; background:#cf942f12; }
+.rm-evidence-hypothesis { color:#cf942f; background:#cf942f12; border-style:dashed; }
+.rm-evidence-none { color:var(--muted); border-style:dashed; }
+/* a word mapping that is not a Rule */
+.rm-theory:not(.rm-entry), .rm-hypothesis:not(.rm-entry), .rm-none:not(.rm-entry) { border-left:3px solid #cf942f; }
 .rm-presets select { padding:6px; margin-left:6px; color:var(--ink); background:var(--surface); border:1px solid var(--line2); border-radius:5px; }
 .rm-preset-options { margin-bottom:14px; font-size:12px; color:var(--ink2); }
 .rm-preset-options summary { cursor:pointer; }
@@ -405,8 +412,67 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pc-other: #484845; } }
 .page-chart > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; list-style-position: outside; }
 .page-chart > summary h3 { display: inline; margin: 0; }
+/* The flex summary hides the browser's disclosure triangle; draw one so the row reads as open/close */
+.page-chart > summary::before { content: '\25B6'; font-size: 9px; color: var(--muted); margin-right: -6px; }
+.page-chart[open] > summary::before { content: '\25BC'; }
 .pc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 14px 0 6px; }
-.pc-controls .wb-button { margin-left: auto; padding: 5px 10px; }
+.pc-controls > .wb-menu:not(.pc-groups) { margin-left: auto; }   /* Export sits at the right; Groups stays by Color by */
+.pc-controls .wb-button { padding: 5px 10px; }
+/* Under a pattern box: the pattern with its grouping written out, or why it cannot be read (workbench.js reading) */
+.wb-reading { margin-top: 5px; font-size: 12px; color: var(--ink2); line-height: 1.5; overflow-wrap: anywhere; }
+.wb-reading:empty { display: none; }
+/* A reading makes its field taller, so rows with pattern boxes align fields at the top; items without a label
+   (a button, the Merge q switch) start one label line (11px x 1.45) plus the 6px gap lower to meet the boxes */
+.wb-fields:has(.wb-pattern) { align-items: start; }
+.wb-fields:has(.wb-pattern) > .wb-button, .wb-fields:has(.wb-pattern) > .context-q { margin-top: calc(11px * 1.45 + 6px); }
+.wb-reading code { font-family: 'JetBrains Mono', monospace; color: var(--ink); }
+.wb-reading-error { color: var(--trn); }
+/* Compare patterns (workbench.js patterns): pattern boxes with a Remove link, column heads with a Pin button */
+.pt-fields .pt-field { flex: 1 1 220px; }
+.pt-label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.pt-remove { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.pt-remove:hover, .pt-remove:focus-visible { color: var(--accent); }
+/* a column head: the pattern wraps within 13em above its Pin button; heads align at the bottom, so do the buttons */
+.pt-table th.pt-head { white-space: normal; vertical-align: bottom; width: 16em; }   /* every pattern column one width, whatever its head */
+/* the group names take only their own width and the empty last column the rest, so the pattern columns start next to
+   the names (and row lines still span the card) */
+.pt-table th:first-child, .pt-table td.pc-name { width: 1%; }
+.pt-table .pt-fill { width: 100%; padding: 0; border-left: 1px solid var(--line); }   /* a closing rule after the last column */
+/* a column head's buttons: move the column left or right, and pin it */
+.pt-head-actions { display: flex; gap: 4px; align-items: center; }
+.pt-move { padding: 2px 6px; font-size: 10px; line-height: 1.4; }
+.pt-head-actions .pt-pin { margin-left: 6px; }   /* apart from the arrows, against mis-clicks */
+.pt-headbox { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; max-width: 13em; margin-left: auto; }
+.pt-pattern { font-family: 'JetBrains Mono', monospace; font-weight: 500; text-align: right; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; }
+.pt-n { color: var(--muted); font-family: Inter, system-ui, sans-serif; margin-right: 6px; }
+/* a rule before every pattern column, so each bar reads with its own number, not the column to its left */
+.pt-table th.pt-head, .pt-table td.pc-m { border-left: 1px solid var(--line); padding-left: 14px; }
+/* the Groups menu (workbench.js groupMenu): a checkbox, swatch and name per group; it opens to the right, being on the left */
+.pc-groups .wb-menu-list { left: 0; right: auto; max-height: 60vh; overflow: auto; }
+.pc-group { display: flex; align-items: center; gap: 7px; }
+.pc-groups .pc-group { padding-right: 18px; }   /* room after the longest name (the menu's item padding comes later) */
+.pc-group input { accent-color: var(--accent); margin: 0; }
+.pc-group .pc-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+/* a two-button toggle among the chart selects, at their size */
+.pc-controls .seg button { padding: 4px 9px; font-size: 12px; }
+.pt-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--ink2); margin: 2px 0 8px; }
+.pt-key .pc-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.pt-pin { padding: 2px 8px; font-size: 11px; }
+.pt-pin.on { border-color: var(--accent); color: var(--accent); }
+/* Export menu: a button that opens a short list of actions (workbench.js exportMenu) */
+.wb-menu { position: relative; display: inline-block; }
+.wb-menu > summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; }
+/* .wb-page summary (secondary text, bottom margin) must not restyle the menu's button */
+.wb-menu > summary.wb-button { color: var(--ink); margin: 0; }
+.wb-menu > summary.wb-button:hover { color: var(--accent); }
+.wb-menu[open] > summary.wb-button { background: color-mix(in srgb, var(--ink) 8%, var(--surface)); }
+.wb-menu > summary::-webkit-details-marker { display: none; }
+/* the same thin chevron as the native selects beside it */
+.wb-chevron { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.wb-menu[open] .wb-chevron { transform: rotate(180deg); }
+.wb-menu-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; min-width: 150px; padding: 4px; border: 1px solid var(--line2); border-radius: 8px; background: var(--pill); box-shadow: var(--shadow), 0 12px 32px rgba(0,0,0,.22); }
+.wb-menu-item { text-align: left; background: none; border: 0; border-radius: 6px; padding: 8px 10px; color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.wb-menu-item:hover, .wb-menu-item:focus-visible { background: color-mix(in srgb, var(--ink) 10%, transparent); }
 .pc-ctl { display: inline-flex; align-items: center; gap: 8px; }
 .pc-ctl .seg button { font-family: Inter, system-ui, sans-serif; }
 .pc-ctl .seg button[data-action="pc-pattern"] { font-family: 'JetBrains Mono', monospace; }
@@ -444,6 +510,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .pc-note { margin-top: 8px; }
 .pc-sep { stroke: var(--line2); stroke-width: 1; stroke-dasharray: 2 3; }
 .pc-info { margin-top: 10px; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; font-size: 12px; line-height: 1.6; color: var(--ink); }
+.pc-info-pages { margin-top: 6px; }
+.pc-info-pages > summary { cursor: pointer; color: var(--accent); }
+.pc-info-pages > summary:hover { text-decoration: underline; }
+.pc-info-pages ul { margin: 6px 0 2px; padding-left: 18px; }
 
 /* Stages view (stage_view.js) */
 .st-table td, .st-table th { text-align: right; padding: 7px 10px; }

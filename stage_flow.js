@@ -15,6 +15,7 @@
 (function (root) {
   'use strict';
   const EPS = 1e-9, STOP = 1e-3, PREFER = 1e-6;
+  const GM = typeof module !== 'undefined' && module.exports ? require('./graph_metrics.js') : root.EchoGraphMetrics;
 
   // ---- min-cost flow by successive shortest paths (queue-based Bellman-Ford, so negative costs are fine).
   // With forceMax false the flow grows only while the cheapest path still has negative cost: rewards are negative costs.
@@ -50,7 +51,7 @@
   // forward-only; historical edges and declared two-step endpoints (C1, C3, C4 ...) work both ways.
   function graphPairs(data, enabled) {
     const out = [];
-    for (const e of data.edges) { const rules = e.rules.filter(r => enabled.has(r.split('.')[0])); if (rules.length) out.push([e.s, e.t, !!e.forwardOnly, rules]); }
+    for (const e of data.edges) { const rules = e.rules.filter(r => GM.ruleLive(r, enabled)); if (rules.length) out.push([e.s, e.t, !!e.forwardOnly, rules]); }
     for (const c of data.chains) if (enabled.has(c.rule)) out.push([c.path[0], c.path[2], false, [`${c.rule} (via ${c.path[1]})`]]);
     return out;
   }

@@ -4,28 +4,36 @@
 (function(root) {
   'use strict';
   const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  // Evidence for a context selector does not establish its unconditional word
-  // rewrite. Baseline membership alone also does not mean a rule is confirmed.
-  const TIERS={published:'Published',supported:'Supported · partial',experimental:'Experimental / hypothesis',reference:'Evidence only'};
+  // Confidence is the reference's (ECHO_RULES.md: Rule, Theory, Hypothesis), carried by the catalog. It is separate
+  // from whether the app can execute an entry and from whether it is switched on. Containers that cover claims of
+  // different confidence are Mixed; implementations and entries without a row of their own are not rated.
+  const TIERS={rule:'Rule',theory:'Theory',hypothesis:'Hypothesis',mixed:'Mixed',none:'Not rated'};
+  const RANK=['rule','mixed','theory','hypothesis','none'];
   const ORIGINAL_GROUPS={d:'Coda edits',ed:'Coda edits',B1:'Liquids',C1:'Liquids',C4:'Liquids',C3:'Compositions',S1:'Stage variants',S2:'Stage variants',S3:'Stage variants',S4:'Vowel shifts'};
-  function tier(r){
-    if(!r.executable)return 'reference';
-    if(['d','ed'].includes(r.code))return 'published';
-    if(['B1','C1','C3','C4','S1','S4','S4_COMPOSE','BG_PROJECT'].includes(r.code))return 'supported';
-    return 'experimental';
-  }
+  const tier=r=>({Rule:'rule',Theory:'theory',Hypothesis:'hypothesis',Mixed:'mixed'})[r&&r.confidence]||'none';
+  // A composed route is only as strong as the weakest rule it needs.
+  const weakest=rs=>rs.map(tier).reduce((a,b)=>RANK.indexOf(b)>RANK.indexOf(a)?b:a,'rule');
+  // Executable entries that are not Rules: what "Remove Theory & Hypothesis" switches off.
+  const experimental=r=>r.executable&&tier(r)!=='rule';
+  // Earlier named sets, kept as presets: the default before 7 October 2026, and Published + supported as it was.
+  const HISTORICAL={original:['d','ed','B1','C1','C3','C4','S1','S2','S4'],supported:['d','ed','B1','C1','C3','C4','S1','S4','S4_COMPOSE','BG_PROJECT']};
   function bulk(active,rows,enable){
     const next=new Set(active);
     for(const r of rows)if(r.executable){if(enable)next.add(r.code);else next.delete(r.code);}
     return next;
   }
   function merge(data, catalog) {
-    const d={...data,rules:data.rules.map(r=>({...r,original:true,executable:true,group:ORIGINAL_GROUPS[r.code]||'Original inventory',evidence:r.sets.includes('E1')?'E1 baseline':'Stage inventory',summary:r.name,sources:['solve/botanical_enrichment/team_echo/redesign/RULE_INVENTORY.md'],default:r.code!=='S3'})),nodes:[...data.nodes],edges:[...data.edges],partners:{...data.partners}};
+    const recommended=new Set(catalog.recommended||[]), meta=catalog.original||{};
+    const d={...data,rules:data.rules.map(r=>({...r,original:true,executable:true,group:ORIGINAL_GROUPS[r.code]||'Original inventory',
+      confidence:meta[r.code]&&meta[r.code].confidence,evidence:r.sets.includes('E1')?'E1 baseline':'Stage inventory',
+      summary:[r.name,meta[r.code]&&meta[r.code].note].filter(Boolean).join('. '),
+      sources:['solve/botanical_enrichment/team_echo/redesign/RULE_INVENTORY.md',...(meta[r.code]&&meta[r.code].note?[catalog.reference]:[])],
+      default:recommended.has(r.code)})),nodes:[...data.nodes],edges:[...data.edges],partners:{...data.partners}};
     const s3=d.rules.find(r=>r.code==='S3');
     if(s3)Object.assign(s3,{
-      evidence:'Experimental comparator; excluded from the active baseline',
-      summary:'Optional bench-loss comparison. Excluded from default, E1 and Published + supported selections because it joins otherwise separate families. C3 retains the bench and remains supported; the two rules have different outputs. Historical body-line evidence is retained below.',
-      sources:[...s3.sources,'solve/botanical_enrichment/ECHO_RULES.md']
+      evidence:'Comparator; outside the recommended set',
+      summary:'Optional bench-loss comparison. Outside the recommended, E1 and Published + supported selections because it joins otherwise separate families. C3 retains the bench and is a Rule; the two rules have different outputs. Historical body-line evidence is retained below.',
+      sources:[...new Set([...s3.sources,'solve/botanical_enrichment/ECHO_RULES.md'])]
     });
     d.lex={...data.lex};
     const nodes=new Map(d.nodes.map(n=>[n.id,n]));
@@ -36,17 +44,35 @@
       const n={id:w,count,rate:Object.fromEntries(d.sections.map(s=>[s.key,count[s.key]*10000/s.N])),total:['HA_early','Hand1_late','HB_all'].reduce((v,k)=>v+count[k],0)};
       nodes.set(w,n);d.nodes.push(n);delete d.lex[w];return true;
     }
+    // One forward edge per word pair, listing every route to it: a family's own code, or for a pair the catalog lists
+    // routes for (compositions), the routes that name the family (ed+GEDY_AR needs both rules on).
+    const routes=catalog.routes||{}, pairs=new Map();
     for(const r of catalog.rules)if(r.executable) {
-      d.rules.push(r);
+      d.rules.push({...r,default:recommended.has(r.code)});
       for(const [from,outputs] of Object.entries(catalog.known[r.code]||{})) for(const to of outputs) {
-        if(node(from)&&node(to))d.edges.push({s:from,t:to,rules:[r.code],stage:['x'],label:from+' → '+to,forwardOnly:true});
-        else {
-          // Unattested outputs remain available to Translate's form scorer.
-          d.partners[from]=[...(d.partners[from]||[]),{w:to,rules:[r.code],label:from+' → '+to,two:false,via:null}];
-        }
+        const key=from+'\n'+to;
+        if(!pairs.has(key))pairs.set(key,{from,to,codes:new Set()});
+        for(const c of own(routes,from,to,r.code))pairs.get(key).codes.add(c);
       }
     }
+    for(const {from,to,codes} of pairs.values()) {
+      const rules=[...codes];
+      if(node(from)&&node(to))d.edges.push({s:from,t:to,rules,stage:['x'],label:from+' → '+to,forwardOnly:true});
+      // Unattested outputs remain available to Translate's form scorer.
+      else d.partners[from]=[...(d.partners[from]||[]),{w:to,rules,label:from+' → '+to,two:false,via:null}];
+    }
     return d;
+  }
+  // A family's routes to one output: those of the catalog's routes that name it, else the family alone (a pair with
+  // no composed route, or one an older family reaches directly, as OA_r does okor → okar).
+  function own(routes,from,to,code) {
+    const via=routes&&routes[from]&&routes[from][to],mine=via?via.filter(c=>c.split('+').includes(code)):[];
+    return mine.length?mine:[code];
+  }
+  // A family's outputs for one word under an active set: a composed output only when every rule of one of its routes
+  // is on. Used where menus are applied word by word (held-out fit, Rule lab).
+  function outputs(catalog,code,word,active) {
+    return (catalog.known[code]&&catalog.known[code][word]||[]).filter(o=>own(catalog.routes,word,o,code).some(c=>c.split('+').every(x=>active.has(x))));
   }
   function selection(rules,saved) {
     const available=new Set(rules.filter(r=>r.executable).map(r=>r.code));
@@ -56,21 +82,26 @@
     const rules=[...data.rules,...catalog.rules.filter(r=>!r.executable)], key='echoActiveRules.v1';
     // Search the entire exported vocabulary, not just six illustrative pairs.
     const searchable=new Map(rules.map(r=>[r.code,(JSON.stringify(r)+' '+JSON.stringify(catalog.known[r.code]||{})).toLowerCase()]));
+    const composed=new Set(Object.values(catalog.routes||{}).flatMap(m=>Object.values(m).flat()).flatMap(c=>c.includes('+')?c.split('+'):[]));
+    const note=r=>r.executable?`Used by Network, Sections, Translate, Stages and the held-out fit. New candidates run forward only.${composed.has(r.code)?' A composed output (shown as ed+GEDY_AR) counts only when every rule it names is on.':''} The Rule lab sets its own occurrence fractions; saved LC1 results stay fixed.`
+      :r.group==='Context selectors'?'Context selector. The app’s word menus cannot apply it, so it changes no count here; use the linked research implementation.'
+      :r.group==='Descriptive findings'?'Descriptive finding: evidence only, with nothing to switch on.'
+      :'Evidence entry only. Not executed by browser word mappings; use the linked research implementation.';
     function save(next) {setActive(next);try{localStorage.setItem(key,JSON.stringify([...next]));}catch(_){} }
     function mount(host,{close}={}) {
       let draft=new Set(getActive()), query='', filter='all', group='all', evidence='all', shown=[];
       const groups=[...new Set(rules.map(r=>r.group))];
-      host.innerHTML=`<div class="rm-head"><div><h2>Rule manager</h2><span class="wb-small">Echo1–5 · reviewed ${catalog.reviewed}</span></div>${close?'<button class="wb-button" data-rm="cancel" aria-label="Close rule manager">Close</button>':''}</div>
+      host.innerHTML=`<div class="rm-head"><div><h2>Rule manager</h2><span class="wb-small" title="Confidence from ${esc(catalog.reference||'the rule reference')}">Echo1–6 · reviewed ${catalog.reviewed} · recommended: ${(catalog.recommended||[]).length} Rules</span></div>${close?'<button class="wb-button" data-rm="cancel" aria-label="Close rule manager">Close</button>':''}</div>
         <div class="rm-toolbar"><input type="search" aria-label="Search rule inventory" placeholder="Search rule, word or finding"><select aria-label="Rule status"><option value="all">All entries</option><option value="active">Active</option><option value="executable">Word mappings</option><option value="research">Context & constructions</option></select><select aria-label="Rule family"><option value="all">All families</option>${groups.map(g=>`<option>${esc(g)}</option>`).join('')}</select></div>
-        <div class="rm-presets"><label class="wb-small">Evidence <select aria-label="Evidence level"><option value="all">All levels</option>${Object.entries(TIERS).map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></label><button class="wb-button" data-rm="enable">Enable shown</button><button class="wb-button" data-rm="disable">Disable shown</button><button class="wb-button" data-rm="remove-experimental">Remove all experimental</button></div>
-        <details class="rm-preset-options"><summary>Replace active set / reset</summary><div class="rm-presets"><button class="wb-button" data-rm="original">Original view</button><button class="wb-button" data-rm="e1">E1</button><button class="wb-button" data-rm="supported">Published + supported</button><button class="wb-button" data-rm="all">All word mappings</button><button class="wb-button" data-rm="none">None</button><button class="wb-button" data-rm="reset">Undo pending changes</button></div></details>
+        <div class="rm-presets"><label class="wb-small">Confidence <select aria-label="Confidence"><option value="all">All levels</option>${Object.entries(TIERS).map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></label><button class="wb-button" data-rm="enable">Enable shown</button><button class="wb-button" data-rm="disable">Disable shown</button><button class="wb-button" data-rm="remove-experimental" title="Switch off every word mapping that is not a Rule">Remove Theory &amp; Hypothesis</button></div>
+        <details class="rm-preset-options"><summary>Replace active set / reset</summary><div class="rm-presets"><button class="wb-button" data-rm="recommended" title="The reference’s transformation Rules: the default">Recommended</button><button class="wb-button" data-rm="original" title="The default before 7 October 2026, with S2 (a Theory)">Original view</button><button class="wb-button" data-rm="e1">E1</button><button class="wb-button" data-rm="supported" title="As grouped before 7 October 2026, with S4_COMPOSE and BG_PROJECT (Theories)">Published + supported</button><button class="wb-button" data-rm="all">All word mappings</button><button class="wb-button" data-rm="none">None</button><button class="wb-button" data-rm="reset">Undo pending changes</button></div></details>
         <div class="rm-list"></div><div class="rm-footer"><span class="wb-small" data-rm="count"></span><button class="wb-button primary" data-rm="apply">Apply selection</button></div>`;
       const list=host.querySelector('.rm-list');
       function render() {
         const rows=shown=rules.filter(r=>(group==='all'||r.group===group)&&(evidence==='all'||tier(r)===evidence)&&(filter==='all'||filter==='active'&&draft.has(r.code)||filter==='executable'&&r.executable||filter==='research'&&!r.executable)&&searchable.get(r.code).includes(query.toLowerCase()));
-        list.innerHTML=rows.map(r=>{const docs=(r.sources||[]).map(s=>window.EchoDocs.link(s,esc(s.split('/').slice(-2).join('/'))+' ↗','wb-link')).filter(Boolean);return `<article class="rm-card rm-${tier(r)}"><div class="rm-title">${r.executable?`<input type="checkbox" aria-label="Enable ${esc(r.code)}" data-code="${r.code}" ${draft.has(r.code)?'checked':''}>`:'<span class="rm-dot" title="Evidence entry; requires a different execution model">◇</span>'}<div><b>${esc(r.code)}</b> ${esc(r.name)}<div class="rm-pattern">${esc(r.pattern)}</div></div><span class="rm-evidence rm-evidence-${tier(r)}" title="${esc(r.evidence)}. Published/supported describe correspondence evidence, not certainty of each translation.">${TIERS[tier(r)]}</span></div><details><summary>Scope & evidence${r.source_forms!=null?' · '+r.source_forms+' source forms':''}</summary><p><b>${esc(r.evidence)}</b> · ${esc(r.summary)}</p>${r.original?'<ul>'+[...(r.conditions||[]),...(r.status||[])].map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>':''}${r.executable?'<p class="wb-small">Active in Network, Sections and Translate. New candidates run forward only. Rule lab uses its own occurrence fractions; saved LC1 results stay fixed.</p>':`<p class="wb-small">Evidence entry only. Not executed by browser word mappings${docs.length?'; use the linked research implementation':''}.</p>`}${(r.examples||[]).map(([w,outs])=>`<div class="rm-example">${esc(w)} → ${esc(outs.join(' / '))}</div>`).join('')}${docs.join('<br>')}${r.executable?`<div class="wb-actions"><button class="wb-button" data-lab="${r.code}">Add to Rule lab</button></div>`:''}</details></article>`;}).join('')||'<p class="wb-empty">No matching rules.</p>';
-        const experiments=rules.filter(r=>draft.has(r.code)&&tier(r)==='experimental').length;
-        host.querySelector('[data-rm="count"]').textContent=`${draft.size} active · ${experiments} experimental · ${rows.length} shown. Applies to graph and Translate.`;
+        list.innerHTML=rows.map(r=>{const docs=(r.sources||[]).map(s=>window.EchoDocs.link(s,esc(s.split('/').slice(-2).join('/'))+' ↗','wb-link')).filter(Boolean);return `<article class="rm-card rm-${tier(r)}${r.executable?'':' rm-entry'}"><div class="rm-title">${r.executable?`<input type="checkbox" aria-label="Enable ${esc(r.code)}" data-code="${r.code}" ${draft.has(r.code)?'checked':''}>`:'<span class="rm-dot" title="Evidence entry; requires a different execution model">◇</span>'}<div><b>${esc(r.code)}</b> ${esc(r.name)}<div class="rm-pattern">${esc(r.pattern)}</div></div><span class="rm-evidence rm-evidence-${tier(r)}" title="${esc(r.evidence)}. Confidence is the rule reference’s; it is not certainty about any one word.">${TIERS[tier(r)]}</span></div><details><summary>Scope & evidence${r.source_forms!=null?' · '+r.source_forms+' source forms':''}</summary><p><b>${esc(r.evidence)}</b> · ${esc(r.summary)}</p>${r.aliases&&r.aliases.length?`<p class="wb-small">Also called ${r.aliases.map(esc).join(', ')}.</p>`:''}${r.original?'<ul>'+[...(r.conditions||[]),...(r.status||[])].map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>':''}<p class="wb-small">${note(r)}</p>${(r.examples||[]).map(([w,outs])=>`<div class="rm-example">${esc(w)} → ${esc(outs.join(' / '))}</div>`).join('')}${docs.join('<br>')}${r.executable?`<div class="wb-actions"><button class="wb-button" data-lab="${r.code}">Add to Rule lab</button></div>`:''}</details></article>`;}).join('')||'<p class="wb-empty">No matching rules.</p>';
+        const experiments=rules.filter(r=>draft.has(r.code)&&experimental(r)).length;
+        host.querySelector('[data-rm="count"]').textContent=`${draft.size} active · ${experiments} Theory or Hypothesis · ${rows.length} shown. Applies to Network, Sections, Translate, Stages and the fit.`;
         for(const [action,on] of [['enable',false],['disable',true]]){
           const count=rows.filter(r=>r.executable&&draft.has(r.code)===on).length,b=host.querySelector(`[data-rm="${action}"]`);
           b.disabled=!count;b.textContent=`${action==='enable'?'Enable':'Disable'} shown (${count})`;
@@ -81,17 +112,17 @@
       host.querySelector('input[type="search"]').oninput=e=>{query=e.target.value;render();};
       host.querySelector('[aria-label="Rule status"]').onchange=e=>{filter=e.target.value;render();};
       host.querySelector('[aria-label="Rule family"]').onchange=e=>{group=e.target.value;render();};
-      host.querySelector('[aria-label="Evidence level"]').onchange=e=>{evidence=e.target.value;render();};
+      host.querySelector('[aria-label="Confidence"]').onchange=e=>{evidence=e.target.value;render();};
       host.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{
         const action=b.dataset.rm;
         if(action==='cancel'){close?.();return;}
         if(action==='apply'){save(new Set(draft));if(close)close();else {render();host.querySelector('[data-rm="count"]').textContent=`Applied ${draft.size} active rules.`;}return;}
-        if(action==='original')draft=selection(rules);
+        if(action==='recommended')draft=selection(rules);
+        else if(action==='original'||action==='supported')draft=selection(rules,HISTORICAL[action]);
         else if(action==='e1')draft=new Set(data.rule_sets.E1);
-        else if(action==='supported')draft=bulk(new Set(),rules.filter(r=>['published','supported'].includes(tier(r))),true);
         else if(action==='all')draft=bulk(new Set(),rules,true);
         else if(action==='enable'||action==='disable')draft=bulk(draft,shown,action==='enable');
-        else if(action==='remove-experimental')draft=bulk(draft,rules.filter(r=>tier(r)==='experimental'),false);
+        else if(action==='remove-experimental')draft=bulk(draft,rules.filter(experimental),false);
         else if(action==='reset')draft=new Set(getActive());
         else if(action==='none')draft.clear();
         render();
@@ -106,6 +137,6 @@
     }
     return {mount,open,apply:save,restore(){try{return selection(rules,JSON.parse(localStorage.getItem(key)));}catch(_){return selection(rules);}}};
   }
-  const api={merge,selection,create,tier,bulk,TIERS};
+  const api={merge,own,outputs,selection,create,tier,weakest,experimental,bulk,TIERS,HISTORICAL};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.EchoRuleManager=api;
 })(typeof window!=='undefined'?window:globalThis);

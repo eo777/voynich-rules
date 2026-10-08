@@ -6,28 +6,10 @@
 <title>Echo · Rule analyzer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=0f6a822a9f">
+<link rel="stylesheet" href="evidence.css?v=19cb6365ba">
+<link rel="stylesheet" href="evidence_guide.css?v=08e30617e6">
 <style>
-:root {
-  color-scheme: light;
-  --bg: #f7f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #8a8984; --line: #e4e2dc; --line2: #d3d1ca;
-  --secA: #2a78d6; --secM: #eb6834; --secB: #1baf7a;
-  --rgW: #2a78d6; --rgL: #eb6834; --rgLA: #774f12;--secAt: #1c5cab; --secMt: #b0461c; --secBt: #0c7a53; --secN: #8894a8; --m11: #52514e; --m1n: #4a3aa7; --mn1: #d55181; --mnn: #a3a19b; --tr1: #3b3a37; --tr1bg: rgba(82,81,78,.24); --trm: #4a3aa7; --trmbg: rgba(74,58,167,.13); --trn: #e34948; --trnbg: rgba(227,73,72,.13); --secL: #eda100; --secH: #e87ba4; --idl: #b3b0a8; --heat0: #f0efec; --heatA: #e34948; --heatB: #2a78d6;
-  --edgeE: #a3a19b; --edgeD: #5d5b57; --hi: #0b0b0b; --pill: #ffffff; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #121211; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #8f8e87; --line: #2c2c2a; --line2: #3a3a37;
-    --secA: #3987e5; --secM: #d95926; --secB: #199e70;
-    --rgW: #3987e5; --rgL: #e0703f; --rgLA: #e1bd92;--secAt: #86b6ef; --secMt: #f0a07c; --secBt: #5fd0a3; --secN: #8f9bb0; --m11: #c3c2b7; --m1n: #9085e9; --mn1: #d55181; --mnn: #8f8e87; --tr1: #c3c2b7; --tr1bg: rgba(195,194,183,.16); --trm: #9085e9; --trmbg: rgba(144,133,233,.2); --trn: #e66767; --trnbg: rgba(230,103,103,.2); --secL: #c98500; --secH: #d55181; --idl: #5e5d58; --heat0: #383835; --heatA: #e66767; --heatB: #3987e5; --edgeE: #8f8e87; --edgeD: #c3c2b7; --hi: #ffffff; --pill: #232322; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #121211; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #8f8e87; --line: #2c2c2a; --line2: #3a3a37;
-  --secA: #3987e5; --secM: #d95926; --secB: #199e70;
-  --rgW: #3987e5; --rgL: #e0703f; --rgLA: #e1bd92;--secAt: #86b6ef; --secMt: #f0a07c; --secBt: #5fd0a3; --secN: #8f9bb0; --m11: #c3c2b7; --m1n: #9085e9; --mn1: #d55181; --mnn: #8f8e87; --tr1: #c3c2b7; --tr1bg: rgba(195,194,183,.16); --trm: #9085e9; --trmbg: rgba(144,133,233,.2); --trn: #e66767; --trnbg: rgba(230,103,103,.2); --secL: #c98500; --secH: #d55181; --idl: #5e5d58; --heat0: #383835; --heatA: #e66767; --heatB: #3987e5; --edgeE: #8f8e87; --edgeD: #c3c2b7; --hi: #ffffff; --pill: #232322; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
-}
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.45 Inter, system-ui, sans-serif; }
 .app { display: flex; flex-direction: column; height: 100vh; }
@@ -104,18 +86,7 @@ td:first-child, th:first-child { text-align: left; }
 .zoom button { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line2); background: var(--pill); color: var(--ink); font-size: 16px; cursor: pointer; box-shadow: var(--shadow); }
 .hint { position: absolute; left: 12px; bottom: 10px; color: var(--muted); font-size: 11px; }
 /* svg */
-  .nlabel { font: 500 12.5px 'JetBrains Mono', monospace; fill: var(--ink); }
 .nsub { font: 500 10.5px 'JetBrains Mono', monospace; fill: var(--muted); }
-.bnum { font: 600 11px 'JetBrains Mono', monospace; }
-.flabel { font: 600 13.5px Inter, system-ui, sans-serif; fill: var(--ink); }
-.base { stroke: var(--line2); stroke-width: 1; }
-.edge { fill: none; stroke-width: 1.4; }
-.edge.m11 { stroke: var(--m11); stroke-width: 2.4; }
-.edge.m1n { stroke: var(--m1n); stroke-width: 1.6; }
-.edge.mn1 { stroke: var(--mn1); stroke-width: 1.6; }
-.edge.mnn { stroke: var(--mnn); stroke-width: 1.4; stroke-dasharray: 2 3; stroke-linecap: round; }
-.badge rect { stroke: none; }
-.badge text { font: 700 11.5px 'JetBrains Mono', monospace; fill: #ffffff; }
 .tabs { display: flex; gap: 2px; margin-top: 12px; }
 .tab { font: 500 13px Inter, sans-serif; border: 0; background: transparent; color: var(--ink2); padding: 6px 12px; border-bottom: 2px solid transparent; cursor: pointer; }
 .tab.on { color: var(--ink); border-bottom-color: var(--ink); }
@@ -402,34 +373,26 @@ svg.mini { display: block; margin-top: 4px; }
 .app.rulesMode #tabCtl, .app.rulesMode .main { display: none; }
 .app.rulesMode #dl, .app.trMode #dl { display: none; }
 .edge-key div { font-size: 12px; }
-.dim .node:not(.on) > rect:not(.hit), .dim .node:not(.on) > line, .dim .node:not(.on) .badge { opacity: .42; }
-.dim .node:not(.on) text { opacity: .7; }
-.dim .edgeg:not(.on) .pill { display: none; }
-.dim .edgeg:not(.on) { opacity: .24; }
-.dim .fam:not(.on) { opacity: .55; }
-.edgeg.on .edge { stroke-width: 3; }
-.edgeg.on .edge.m11 { stroke-width: 3.6; }
-.pill rect { fill: var(--pill); stroke: var(--line2); }
-.pill text { font: 500 11px 'JetBrains Mono', monospace; fill: var(--ink); }
-.node .hit { fill: transparent; cursor: pointer; }
-.node.sel .hit { stroke: var(--hi); stroke-width: 1.5; stroke-dasharray: 3 2; }
 .theme { margin-left: auto; }
 @media (max-width: 900px) { .main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .side { border-left: 0; border-top: 1px solid var(--line); max-height: 40vh; } }
 </style>
-<link rel="stylesheet" href="workbench.css?v=f6719e732d">
+<link rel="stylesheet" href="network_view.css?v=cb3f4519a3">
+<link rel="stylesheet" href="workbench.css?v=83a13b824f">
 </head>
 <body>
 <div class="app">
   <header>
     <div class="brandline"><h1>Echo <span>/ Rule analyzer</span></h1><span class="research-tag">Voynich dialect research · work in progress<span id="releaseTag"></span></span></div>
     <div class="sub">Understand the rules, investigate what remains, and explore Herbal A ↔ Herbal B.</div>
-    <nav class="tabs" aria-label="Analyzer views"><button class="tab" data-tab="residuals">Residuals</button><button class="tab" data-tab="distribution">Distribution</button><button class="tab" data-tab="contexts">Words &amp; contexts</button><button class="tab" data-tab="lab">Rule lab</button><button class="tab on" data-tab="net">Network</button><button class="tab" data-tab="sections">Sections</button><button class="tab" data-tab="stages">Stages</button><button class="tab" data-tab="translate">Translate</button><button class="tab" data-tab="rules">Rule manager</button></nav>
+    <nav class="tabs" aria-label="Analyzer views"><button class="tab" data-tab="residuals">Residuals</button><button class="tab" data-tab="distribution">Distribution</button><button class="tab" data-tab="contexts">Words &amp; contexts</button><button class="tab" data-tab="patterns">Compare patterns</button><button class="tab" data-tab="lab">Rule lab</button><button class="tab" data-tab="evidence">Evidence</button><button class="tab on" data-tab="net">Network</button><button class="tab" data-tab="sections">Sections</button><button class="tab" data-tab="stages">Stages</button><button class="tab" data-tab="translate">Translate</button><button class="tab" data-tab="rules">Rule manager</button></nav>
   </header>
   <div class="gbar">
     <button class="wb-button" id="manageRules">Manage rules</button>
+    <button class="chip" id="linkRules" hidden title="The rules came from a link and are not saved. Click to use your own.">use my rules</button>
     <div class="ctl" id="repCtl" title="Count a word repeated immediately on the same line (chol chol) once, in every population. Saved LC1 tables and Words &amp; contexts are unchanged."><label for="repeats">Repeats</label><select id="repeats"><option value="keep">Count every token</option><option value="collapse">Collapse X X → X</option></select></div>
     <div class="ctl theme"><div class="seg" id="themeSeg"><button data-v="auto" class="on">auto</button><button data-v="light">light</button><button data-v="dark">dark</button></div>
       <button class="chip" id="glossBtn" title="Definitions of the terms used in this app">? glossary</button>
+      <button class="chip" id="copyLink" title="Copy a link that opens this view, with its settings and rules">copy link</button>
       <button class="chip" id="dl" title="Save the network or sections drawing as an SVG file">save view as SVG</button></div>
     <div class="gloss" id="gloss" hidden></div>
   </div>
@@ -538,14 +501,30 @@ svg.mini { display: block; margin-top: 4px; }
   <div class="rulesPage" id="rulesPage" hidden></div>
   <div class="wb-page" id="workbenchPage" hidden></div>
 </div>
-<script src="release.js?v=c41a9e0089"></script>
+<script src="release.js?v=22d7de4102"></script>
 <script src="network_data.js?v=c730680c78"></script>
-<script src="rule_catalog_data.js?v=c1d53d4f93"></script>
+<script src="rule_catalog_data.js?v=d720b79172"></script>
 <script src="research_links.js?v=c929aa43a1"></script>
-<script src="rule_manager.js?v=86db5eee3d"></script>
-<script src="graph_metrics.js?v=4a20854dca"></script>
+<script src="rule_manager.js?v=7d7c444b67"></script>
+<script src="graph_metrics.js?v=9369ffd07e"></script>
 <script src="graph_layout.js?v=b045185219"></script>
-<script src="connection_inspector.js?v=810b1d5bbc"></script>
+<script src="network_view.js?v=609c7788a6"></script>
+<script src="view_state.js?v=d851dd7b24"></script>
+<script src="evidence_data.js?v=577b855101"></script>
+<script src="evidence_core.js?v=6fe8f4c0d6"></script>
+<script src="evidence_visuals.js?v=0ba8236fed"></script>
+<script src="evidence_members.js?v=a6f49077b6"></script>
+<script src="evidence_flow.js?v=2546ffc2da"></script>
+<script src="evidence_patterns_core.js?v=76002b43d3"></script>
+<script src="evidence_slope_chart.js?v=0c09bed78f"></script>
+<script src="evidence_patterns.js?v=5f981fd8f1"></script>
+<script src="evidence_family_tree.js?v=6c5c3ba94e"></script>
+<script src="evidence_outcomes.js?v=bc0437d35b"></script>
+<script src="evidence_outcome_scatter.js?v=57fc3c4671"></script>
+<script src="evidence_explorer.js?v=46a1e64f0d"></script>
+<script src="evidence_guide.js?v=cf74118c8c"></script>
+<script src="evidence_view.js?v=7a4fcee0c1"></script>
+<script src="connection_inspector.js?v=2f5709ddb0"></script>
 <script src="translation_insights.js?v=5b8ff1850d"></script>
 <script>
 (() => {
@@ -558,6 +537,10 @@ const RULE_TIP = Object.fromEntries(D.rules.map(r => [r.code, `${r.code}: ${r.pa
 const rulePat = code => { const [c, step] = code.split('.'); const r = RINFO[c]; if (!r) return code; if (!step) return r.pattern; const p = r.pattern.split(' → '); return `${p[step - 1]} → ${p[step]}`; };
 const state = { mid: 'PharmaA', minTok: 6, scale: 'lin', rules: window.EchoRuleManager.selection(D.rules), sel: null, hover: null };
 const GM = window.EchoGraphMetrics;
+// One route code as text: a composition (the rules it needs, as a set, not in order), a step of a two-step rule, or
+// one rule.
+const ruleLine = code => code.includes('+') ? `${code} (needs ${GM.ruleParts(code).length === 2 ? 'both' : 'all ' + GM.ruleParts(code).length}: ${GM.ruleParts(code).map(c => RINFO[c] ? RINFO[c].pattern : c).join(' · ')})`
+  : code.includes('.') ? `${code.split('.')[0]} step ${code.split('.')[1]} of 2 (${RINFO[code.split('.')[0]].pattern})` : `${code} (${RINFO[code].pattern})`;
 const graphWords = GM.vocabulary(D);
 // The Stages view reads the same data, vocabulary and active rules as Network and Sections.
 window.EchoApp = {data: D, words: graphWords, rules: () => state.rules};
@@ -623,7 +606,7 @@ repSel.onchange = () => {
   catch (e) { repSel.value = repeats.mode; ctl.classList.add('error'); ctl.title = e.message; console.error(e); return; }
   [...midSel.options].forEach(o => { o.textContent = `${SEC[o.value].label} (${SEC[o.value].N.toLocaleString()} tok)`; });
   draw.fitted = false;
-  if (['residuals', 'distribution', 'contexts', 'lab'].includes(state.tab)) window.EchoWorkbench?.show(state.tab); else redraw();
+  if (['residuals', 'distribution', 'contexts', 'patterns', 'lab'].includes(state.tab)) window.EchoWorkbench?.show(state.tab); else redraw();
   if (state.sel && (state.tab === 'net' || state.tab === 'sections')) renderDetail(state.sel);
 };
 const SHORT_POP = {HA_early: 'early A', HA_late: 'late A', PharmaA: 'pharma', Hand1_late: 'late A + pharma', HB_all: 'Herbal B'};
@@ -640,13 +623,98 @@ document.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => {
   if (typeof redraw === 'function') redraw(); else draw();
 });
 try { const t = localStorage.getItem('echoTheme'); if (t) document.querySelector(`#themeSeg button[data-v="${t}"]`).click(); } catch (e) {}
+// A rule set from a link (below) is used for that visit only; applying rules in the manager saves them as usual.
+let linkRules = false;
+function showRules() {
+  document.getElementById('manageRules').textContent = `Rules · ${state.rules.size} active${linkRules ? ' (link)' : ''}`;
+  document.getElementById('linkRules').hidden = !linkRules;
+}
 const ruleManager = window.EchoRuleManager.create({data:D,catalog:window.ECHO_RULE_CATALOG,
   getActive:()=>state.rules,
-  setActive:rules=>{state.rules=rules;draw.fitted=false;document.getElementById('manageRules').textContent=`Rules · ${rules.size} active`;redraw();},
+  setActive:rules=>{state.rules=rules;linkRules=false;draw.fitted=false;showRules();redraw();},
   addToLab:code=>window.EchoWorkbench.addCatalogRule(code)});
 state.rules=ruleManager.restore();
-document.getElementById('manageRules').textContent=`Rules · ${state.rules.size} active`;
+showRules();
 document.getElementById('manageRules').onclick=()=>ruleManager.open(()=>{if(state.tab==='rules')renderRules();});
+
+// ---------- links to a view (view_state.js; parameters in VIEWS.md). Copy link writes the current view into the
+// address and copies it; opening such a link, or changing the hash, sets that view: tab, settings, rules.
+const VS = window.EchoViewState;
+function currentView() {
+  if (state.tab === 'evidence') return {tab:'evidence', ...window.EchoEvidence.view()};
+  const v = {tab: state.tab, rules: [...state.rules].sort(), repeats: repeats.mode === 'keep' ? '' : repeats.mode};
+  if (state.tab === 'net' || state.tab === 'sections') Object.assign(v, {mid: state.mid, min: state.minTok, scale: state.scale, q: state.query,
+    find: state.query ? state.findMode : '', sel: state.sel || ''}, state.tab === 'net' ? {cmp: state.cmp} : {cols: state.cols});
+  else if (state.tab === 'translate') Object.assign(v, {page: state.tr.folio, from: state.tr.from, to: state.tr.to, show: state.tr.view});
+  else if (state.tab === 'stages') Object.assign(v, window.EchoStages.view());
+  else if (state.tab !== 'rules') Object.assign(v, window.EchoWorkbench.view(state.tab));
+  return v;
+}
+function applyLink(hash) {
+  const p = VS.decode(hash), R = VS.read; if (!p) return false;
+  const tab = R.oneOf(p.tab, [...document.querySelectorAll('.tab')].map(t => t.dataset.tab)); if (!tab) return false;
+  const codes = R.list(p.rules), secKeys = D.sections.map(s => s.key);
+  if (codes) {
+    const saved = ruleManager.restore();
+    state.rules = new Set(codes.filter(c => RINFO[c])); draw.fitted = false;
+    linkRules = state.rules.size !== saved.size || [...state.rules].some(c => !saved.has(c));     // only a different set is marked
+    showRules();
+  }
+  if (R.oneOf(p.repeats, ['keep', 'collapse']) && p.repeats !== repeats.mode) { repSel.value = p.repeats; repSel.onchange(); }
+  const mid = R.oneOf(p.mid, MIDS); if (mid && tab !== 'stages') { state.mid = midSel.value = mid; fillCmp(); }
+  const cmp = R.oneOf(p.cmp, ['direct', 'first', 'second']); if (cmp) { state.cmp = cmpSel.value = cmp; }
+  const min = R.number(p.min, 1, 40); if (min !== undefined) { state.minTok = min; mt.value = min; document.getElementById('minTokV').textContent = mt.value; }
+  const scale = R.oneOf(p.scale, ['lin', 'sqrt']); if (scale) { state.scale = scale; document.querySelectorAll('#scale button').forEach(b => b.classList.toggle('on', b.dataset.v === scale)); }
+  const find = R.oneOf(p.find, ['word', 'direct', 'family']); if (find) state.findMode = document.getElementById('findMode').value = find;
+  if (tab === 'net' || tab === 'sections') { const q = R.text(p.q, 60) ?? ''; state.query = q.trim(); document.getElementById('find').value = q; }
+  const cols = R.list(p.cols)?.filter(k => secKeys.includes(k)); if (cols && cols.length >= 2) state.cols = cols;
+  if (tab === 'translate') {
+    fillSelects();
+    const page = R.oneOf(p.page, D.pages.map(x => x.folio)); if (page) { setPage(page); document.getElementById('trFolio').value = page; }
+    for (const side of ['from', 'to']) { const k = R.oneOf(p[side], secKeys); if (k) state.tr[side] = document.getElementById(side === 'from' ? 'trFrom' : 'trTo').value = k; }
+    const show = R.oneOf(p.show, ['best', 'all']); if (show) { state.tr.view = show; document.querySelectorAll('#trView button').forEach(b => b.classList.toggle('on', b.dataset.v === show)); }
+  }
+  if (tab === 'evidence') window.EchoEvidence.applyView(p);
+  else if (tab === 'stages') window.EchoStages.applyView(p);
+  else if (['residuals', 'distribution', 'contexts', 'patterns', 'lab'].includes(tab)) window.EchoWorkbench.applyView(tab, p);
+  document.querySelector(`.tab[data-tab="${tab}"]`).click();
+  const sel = R.text(p.sel, 60);
+  if (sel && (tab === 'net' || tab === 'sections') && graphWords.has(sel)) { state.sel = sel; redraw(); }
+  const at = R.oneOf(p.at, Object.keys(CHARTS)); if (at) revealChart(at);
+  return true;
+}
+// Share link (beside each chart) adds at=<chart>: opening the link scrolls to that chart, once it is drawn (the
+// distribution plots and Stages draw a moment later), and outlines it briefly.
+const CHARTS = {evidence: '.ev-heading', net: '.stage', sections: '#secMain', stages: '#workbenchPage .wb-wrap', pages: '#wb-page-chart', patterns: '#wb-patterns-table', distribution: '#wb-distribution-chart .distribution-card'};
+function revealChart(at) {
+  let tries = 0;
+  const look = () => {
+    const el = document.querySelector(CHARTS[at]);
+    if (!el) { if (++tries < 80) setTimeout(look, 100); return; }
+    el.scrollIntoView({block: 'start'}); el.classList.add('share-target'); setTimeout(() => el.classList.remove('share-target'), 2200);
+  };
+  look();
+}
+async function copyLink(view, b) {
+  const label = b.dataset.label ||= b.textContent, lower = label === label.toLowerCase();
+  const said = text => { b.textContent = lower ? text.toLowerCase() : text; setTimeout(() => { b.textContent = label; }, 1600); };
+  history.replaceState(null, '', '#' + VS.encode(view));
+  try { await navigator.clipboard.writeText(location.href); said('Link copied'); } catch (_) { said('Link is in the address bar'); }
+}
+document.getElementById('copyLink').onclick = e => copyLink(currentView(), e.currentTarget);
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-share]'); if (!b) return;
+  e.preventDefault();  // a Share link in a chart's <summary> must not also open or close the chart
+  copyLink({...currentView(), at: b.dataset.share === 'tab' ? state.tab : b.dataset.share}, b);
+});
+document.getElementById('linkRules').onclick = () => {
+  state.rules = ruleManager.restore(); linkRules = false; draw.fitted = false; showRules();
+  const p = VS.decode(location.hash); if (p) { delete p.rules; history.replaceState(null, '', '#' + VS.encode(p)); }
+  if (['residuals', 'distribution', 'contexts', 'patterns', 'lab'].includes(state.tab)) window.EchoWorkbench.show(state.tab); else redraw();
+};
+let initialLinkApplied = false;
+window.addEventListener('load', () => { if (!initialLinkApplied) applyLink(location.hash); });
+window.addEventListener('hashchange', () => applyLink(location.hash));
 document.getElementById('find').oninput = e => {
   state.query = e.target.value.trim(); state.sel = null; state.selCell = null;
   const q = state.query.replace(/^q/, '');
@@ -746,273 +814,39 @@ function graphAuditHTML(id, withRanges = false) {
     <details><summary>Allocation method and limits</summary><p class="wb-small">First retain the rate shared by the same spelling. Allocate only remaining source excess into remaining target room, jointly across enabled pairings and declared two-step endpoints. This is one maximum-flow allocation; individual routes can vary when several solutions tie. It is an optimistic capacity example, not the saved LC1 fitted policy or recovered ancestry. Hidden low-count partners participate and appear in the route list. Source = kept + sent + left; target = kept + received + missing.</p></details></div>`;
 }
 
-// ---------- layout: components, longest-path layers, barycentre ordering, shelf packing
-// 32px bar pitch leaves room for four-digit integer labels at 11px monospace.
-const G = { colW: 190, rowH: 158, glyphW: 78, barW: 14, gap: 18, maxBar: 72, famPad: 26 };
-let nodesPos = new Map(), dummyPos = new Map(), lastBox = null;
-function layout(g) {
-  const adj = new Map(g.nodes.map(n => [n, []]));
-  g.edges.forEach(e => { adj.get(e.s).push(e.t); adj.get(e.t).push(e.s); });
-  const comp = new Map(); const comps = [];
-  for (const n of g.nodes) {
-    if (comp.has(n)) continue;
-    const c = []; const st = [n]; comp.set(n, comps.length);
-    while (st.length) { const x = st.pop(); c.push(x); for (const y of adj.get(x)) if (!comp.has(y)) { comp.set(y, comps.length); st.push(y); } }
-    comps.push(c);
-  }
-  const mass = n => { const r = byId[n].rate; return r.HA_early + r[state.mid] + r.HB_all; };
-  const boxes = comps.map(c => {
-    const set = new Set(c);
-    const es = g.edges.filter(e => set.has(e.s));
-    if(window.EchoGraphLayout.dense(c.length,es.length))return window.EchoGraphLayout.overview(c,es,mass,G);
-    // longest-path layering: column = number of rule steps from a word no rule produces (graph is acyclic)
-    const layer = new Map(c.map(n => [n, 0]));
-    for (let it = 0; it < c.length + 2; it++) { let ch = false; es.forEach(e => { if (layer.get(e.t) < layer.get(e.s) + 1 && layer.get(e.s) + 1 < 12) { layer.set(e.t, layer.get(e.s) + 1); ch = true; } }); if (!ch) break; }
-    const L = Math.max(...layer.values()) + 1;
-    // an edge that skips columns gets one placeholder per skipped column, so ordering and routing see it
-    const lay = new Map(layer), isDummy = new Set(), segs = [], chains = new Map();
-    es.forEach(e => {
-      const a = layer.get(e.s), b = layer.get(e.t);
-      if (b - a <= 1) { segs.push([e.s, e.t]); return; }
-      let prev = e.s; const ds = [];
-      for (let k = a + 1; k < b; k++) { const d = `\u0000${e.s}>${e.t}#${k}`; lay.set(d, k); isDummy.add(d); ds.push(d); segs.push([prev, d]); prev = d; }
-      segs.push([prev, e.t]); chains.set(e.s + '>' + e.t, ds);
-    });
-    const cols = Array.from({ length: L }, () => []);
-    lay.forEach((k, n) => cols[k].push(n));
-    const up = new Map(), dn = new Map();
-    segs.forEach(([u, v]) => { (dn.get(u) || dn.set(u, []).get(u)).push(v); (up.get(v) || up.set(v, []).get(v)).push(u); });
-    const w8 = n => isDummy.has(n) ? 0 : mass(n);
-    cols.forEach(col => col.sort((a, b) => w8(b) - w8(a)));
-    const pos = new Map(); const setPos = () => cols.forEach(col => col.forEach((n, j) => pos.set(n, j)));
-    setPos();
-    const between = i => segs.filter(([u, v]) => lay.get(u) === i && lay.get(v) === i + 1);
-    const crossPair = i => { const E = between(i); let x = 0;
-      for (let a = 0; a < E.length; a++) for (let b = a + 1; b < E.length; b++) {
-        const d1 = pos.get(E[a][0]) - pos.get(E[b][0]), d2 = pos.get(E[a][1]) - pos.get(E[b][1]); if (d1 * d2 < 0) x++; }
-      return x; };
-    const crossings = () => { let x = 0; for (let i = 0; i + 1 < L; i++) x += crossPair(i); return x; };
-    const snapshot = () => cols.map(col => col.slice());
-    let best = snapshot(), bestX = crossings();
-    // barycentre sweeps, alternating direction; keep the ordering with the fewest crossings
-    for (let it = 0; it < 28 && bestX > 0; it++) {
-      const down = it % 2 === 0;
-      const order = down ? cols.map((_, i) => i) : cols.map((_, i) => L - 1 - i);
-      order.forEach(i => {
-        const col = cols[i];
-        const bc = n => { const nb = (down ? up : dn).get(n) || []; return nb.length ? nb.reduce((a, m) => a + pos.get(m), 0) / nb.length : pos.get(n); };
-        const key = new Map(col.map(n => [n, bc(n)]));
-        col.sort((a, b) => key.get(a) - key.get(b) || pos.get(a) - pos.get(b)); col.forEach((n, j) => pos.set(n, j));
-      });
-      const x = crossings(); if (x < bestX) { bestX = x; best = snapshot(); }
-    }
-    best.forEach((col, i) => { cols[i] = col; }); setPos();
-    // local improvement: swap neighbours whenever that removes crossings
-    for (let pass = 0; pass < 12 && bestX > 0; pass++) {
-      let improved = false;
-      cols.forEach((col, i) => {
-        for (let j = 0; j + 1 < col.length; j++) {
-          const local = () => (i > 0 ? crossPair(i - 1) : 0) + (i + 1 < L ? crossPair(i) : 0);
-          const before = local();
-          [col[j], col[j + 1]] = [col[j + 1], col[j]]; pos.set(col[j], j); pos.set(col[j + 1], j + 1);
-          if (local() < before) improved = true;
-          else { [col[j], col[j + 1]] = [col[j + 1], col[j]]; pos.set(col[j], j); pos.set(col[j + 1], j + 1); }
-        }
-      });
-      if (!improved) break;
-    }
-    // vertical positions: pull each item level with its neighbours, keep the order and the spacing
-    const size = n => isDummy.has(n) ? 30 : G.rowH;
-    const yv = new Map();
-    cols.forEach(col => { let y = 0; col.forEach((n, j) => { if (j) y += (size(col[j - 1]) + size(n)) / 2; yv.set(n, y); }); });
-    const place = (col, want) => {
-      const n = col.length; if (!n) return;
-      const f = new Array(n), b = new Array(n);
-      for (let j = 0; j < n; j++) f[j] = j ? Math.max(want[j], f[j - 1] + (size(col[j - 1]) + size(col[j])) / 2) : want[j];
-      for (let j = n - 1; j >= 0; j--) b[j] = j < n - 1 ? Math.min(want[j], b[j + 1] - (size(col[j]) + size(col[j + 1])) / 2) : want[j];
-      const m = f.map((v, j) => (v + b[j]) / 2);
-      for (let j = 0; j < n; j++) { const v = j ? Math.max(m[j], yv.get(col[j - 1]) + (size(col[j - 1]) + size(col[j])) / 2) : m[j]; yv.set(col[j], v); }
-    };
-    for (let it = 0; it < 10; it++) {
-      const order = it % 2 === 0 ? cols.map((_, i) => i) : cols.map((_, i) => L - 1 - i);
-      order.forEach(i => { const col = cols[i];
-        const want = col.map(n => { const nb = [...(up.get(n) || []), ...(dn.get(n) || [])]; return nb.length ? nb.reduce((a, m) => a + yv.get(m), 0) / nb.length : yv.get(n); });
-        place(col, want); });
-    }
-    const y0 = Math.min(...yv.values());
-    const coords = new Map(), dummies = new Map();
-    c.forEach(n => coords.set(n, { x: lay.get(n) * G.colW, y: yv.get(n) - y0 }));
-    chains.forEach((ds, k) => dummies.set(k, ds.map(d => ({ x: lay.get(d) * G.colW, y: yv.get(d) - y0 }))));
-    const H = Math.max(...[...yv.values()].map(v => v - y0)) + G.rowH;
-    const title = c.slice().sort((a, b) => mass(b) - mass(a)).slice(0, 3).join(' \u00b7 ');
-    return { nodes: c, edges: es, coords, dummies, crossings: bestX, w: (L - 1) * G.colW + G.glyphW + 70, h: H, title, mass: c.reduce((a, n) => a + mass(n), 0) };
-  });
-  boxes.sort((a, b) => b.mass - a.mass);
-  // shelf packing to a target width
-  const W = Math.max(700, (svg.clientWidth - 40) / 0.9);
-  let x = 0, y = 0, shelfH = 0;
-  boxes.forEach(b => {
-    if (x > 0 && x + b.w > W) { x = 0; y += shelfH + G.famPad * 2; shelfH = 0; }
-    b.x = x; b.y = y; x += b.w + G.famPad * 2; shelfH = Math.max(shelfH, b.h - 20);
-  });
-  return boxes;
-}
-// ---------- drawing
-let view = { k: 1, x: 20, y: 20 };
-function applyView() { vp.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); }
-let scaleMax = 1;
-function barH(r) { if (r <= 0) return 0; return state.scale === 'lin' ? G.maxBar * r / scaleMax : G.maxBar * Math.sqrt(r / scaleMax); }
-
-function glyph(parent, n, x, y, big) {
-  const g = el('g', { class: 'node', transform: `translate(${x},${y})` }, parent);
-  g.dataset.id = n.id;
-  const S = secs(); const hollow = S.every(k => n.count[k] === 0);
-  const [cmpFrom, cmpTo] = cmpPair(), mass = pairAudit(cmpFrom, cmpTo).perWord.get(n.id);
-  el('rect', { class: 'hit', x: -8, y: -G.maxBar - 22, width: G.glyphW + 16, height: G.maxBar + 42, rx: 6 }, g);
-  S.forEach((k, i) => {
-    const h = barH(n.rate[k]); const bx = i * (G.barW + G.gap);
-    if (h > 0) el('rect', { x: bx, y: -h, width: G.barW, height: h, rx: 1.5, fill: css(secVar(k)) }, g);
-    else el('rect', { x: bx, y: -1.5, width: G.barW, height: 1.5, fill: css('--line2') }, g);
-    const missing=k===cmpFrom?mass.unplaced:k===cmpTo?mass.unfilled:0;
-    if(missing>1e-8){const retainedH=barH(Math.max(0,n.rate[k]-missing));el('rect',{x:bx,y:-h,width:G.barW,height:Math.max(1,h-retainedH),fill:k===cmpFrom?'#d99836':'#d96b77',class:'mass-segment'},g);}
-    const bn = el('text', { class: 'bnum', x: bx + G.barW / 2, y: -Math.max(h, 1.5) - 3, 'text-anchor': 'middle', fill: css(n.count[k] ? secTxt(k) : '--muted') }, g); bn.textContent = graphRate(n.rate[k]);
-    el('title',{},bn).textContent=`${SEC[k].label}: ${fmt(n.rate[k])} /10k (${n.count[k]} tokens)`;
-  });
-  el('line', { class: 'base', x1: -3, x2: G.glyphW + 3, y1: 0.5, y2: 0.5 }, g);
-  const t = el('text', { class: 'nlabel', x: G.glyphW / 2, y: 14, 'text-anchor': 'middle' }, g); t.textContent = n.id;
-  const tag = k => ({HA_early: 'A', HB_all: 'B', PharmaA: 'ph', HA_late: 'lA', Hand1_late: 'mid'}[k] || k);
-  el('text',{class:'word-mass mass-left',x:G.glyphW/2,y:28,'text-anchor':'middle'},g).textContent=`${tag(cmpFrom)} left ${graphRate(mass.unplaced)}`;
-  el('text',{class:'word-mass mass-missing',x:G.glyphW/2,y:40,'text-anchor':'middle'},g).textContent=`${tag(cmpTo)} missing ${graphRate(mass.unfilled)}`;
-  el('title',{},g).textContent=`${n.id}: source ${fmt(mass.source)} = kept ${fmt(mass.retained)} + sent ${fmt(mass.sent)} + left ${fmt(mass.unplaced)}; target ${fmt(mass.target)} = kept ${fmt(mass.retained)} + received ${fmt(mass.received)} + missing ${fmt(mass.unfilled)} /10k`;
-  if (hollow) { el('rect', { x: -2, y: -18, width: G.glyphW + 4, height: 18, rx: 3, fill: 'none', stroke: css('--line2'), 'stroke-dasharray': '2 2' }, g); }
-  return g;
-}
-
-function edgePath(a, b, via) {
-  const x1 = a.x + G.glyphW + 6, y1 = a.y - 22, x2 = b.x - 8, y2 = b.y - 22;
-  if (x2 <= x1) { // same column or backwards (rare): arc above
-    const my = Math.min(y1, y2) - 40;
-    return `M${a.x + G.glyphW / 2},${a.y - G.maxBar - 4} C${a.x + G.glyphW / 2},${my} ${b.x + G.glyphW / 2},${my} ${b.x + G.glyphW / 2},${b.y - G.maxBar - 4}`;
-  }
-  // points: start, each placeholder (a column skipped), end; horizontal tangents at every point
-  const pts = [[x1, y1], ...(via || []).map(d => [d.x + G.glyphW / 2, d.y - 22]), [x2, y2]];
-  let dstr = `M${pts[0][0]},${pts[0][1]}`;
-  for (let k = 1; k < pts.length; k++) { const [px, py] = pts[k - 1], [qx, qy] = pts[k], dx = Math.max(24, (qx - px) * 0.5);
-    dstr += ` C${px + dx},${py} ${qx - dx},${qy} ${qx},${qy}`; }
-  return dstr;
-}
-
-
+// ---------- drawing: network_view.js lays out and draws the families; this page supplies the data, the mass ledger
+// for the Mass bars comparison, and the panels (detail, status, keys).
+const NV = window.EchoNetworkView, G = NV.GEOMETRY, MAP_TXT = NV.MAP_TXT;
+let deg = NV.degrees({edges: []}), degL = deg.left, degR = deg.right;
+function computeDeg(g) { deg = NV.degrees(g); degL = deg.left; degR = deg.right; }
+const mapClass = e => NV.mapClass(e, deg);
+// Sections lays out its families the same way, weighted by the Network tab's three charted sections.
+const layout = g => NV.layout(g, n => { const r = byId[n].rate; return r.HA_early + r[state.mid] + r.HB_all; }, svg.clientWidth);
+const netView = NV.create(svg, {vp,
+  onHover: id => { if (id) { if (!state.sel) renderDetail(id, true); status(id); } else { if (!state.sel) renderDetail(null); status(null); } },
+  onSelect: id => { state.sel = id; renderDetail(id); }});
+const clearHi = () => netView.clear();
+const highlightClass = c => netView.highlightClass(c);
+const massTag = k => ({HA_early: 'A', HB_all: 'B', PharmaA: 'ph', HA_late: 'lA', Hand1_late: 'mid'}[k] || k);
 let G_cur = null;
 function draw() {
   CSSV = {}; const g = visibleGraph(); G_cur = g;
-  const detailedLabels=!window.EchoGraphLayout.dense(g.nodes.length,g.edges.length);
-  scaleMax = Math.max(1, ...g.nodes.flatMap(n => secs().map(k => byId[n].rate[k])));
-  const boxes = layout(g);
-  vp.innerHTML = '';
   computeDeg(g);
-  nodesPos = new Map(); dummyPos = new Map();
-  const eL = el('g', {}, vp), nL = el('g', {}, vp), pL = el('g', {}, vp);
-  boxes.forEach(b => {
-    const fg = el('g', { class: 'fam', transform: `translate(${b.x},${b.y})` }, eL);
-    const ft = el('text', { class: 'flabel', x: 0, y: -26 }, fg); ft.textContent = b.title + (b.nodes.length > 3 ? ' …' : '') + `   (${b.nodes.length} words)`;
-    el('text', {class:'family-audit', x:0, y:-9}, fg).textContent = familyBadge(b.nodes, ...cmpPair());
-    b.coords.forEach((p, n) => nodesPos.set(n, { x: b.x + p.x, y: b.y + p.y + G.maxBar + 20 }));
-    b.dummies.forEach((pts, k) => dummyPos.set(k, pts.map(q => ({ x: b.x + q.x, y: b.y + q.y + G.maxBar + 20 }))));
-  });
-  const drawn = [];
-  g.edges.forEach(e => {
-    const a = nodesPos.get(e.s), b = nodesPos.get(e.t);
-    const eg = el('g', { class: 'edgeg' }, eL); eg.dataset.s = e.s; eg.dataset.t = e.t; eg.dataset.r = e.rules.join(' ');
-    const cls = mapClass(e);
-    eg.dataset.m = cls;
-    const p = el('path', { class: 'edge ' + cls, d: edgePath(a, b, dummyPos.get(e.s + '>' + e.t)) }, eg);
-    el('title', {}, eg).textContent = `${e.s} \u2014 ${e.t}: ${e.label}   (${MAP_TXT[cls].short})\n` + e.rules.map(r => { const [c, s2] = r.split('.'); return s2 ? `${c} step ${s2} of 2 (${RINFO[c].pattern})` : `${c} (${RINFO[c].pattern})`; }).join('\n');
-    // Geometry sampling and all-edge label collision checks dominated render
-    // time on expanded inventories. Dense views use native hover titles only.
-    if(detailedLabels){
-      const len = p.getTotalLength ? p.getTotalLength() : 0;
-      const samples = []; for (let d = 0; d <= len; d += Math.max(8,len/80)) { const q = p.getPointAtLength(d); samples.push([q.x, q.y]); }
-      drawn.push({ e, eg, p, len, samples, a, b });
-    }
-  });
-  // each label goes where it covers the fewest other lines and no earlier label
-  const pills = [];
-  drawn.forEach(D0 => {
-    const label = state.query&&state.findMode==='direct'?D0.e.rules.join(' / '):D0.e.label, tw = [...label].length * 6.9 + 14;
-    let bestM = null, bestScore = Infinity;
-    for (const f of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82]) {
-      const q = D0.len ? D0.p.getPointAtLength(D0.len * f) : { x: (D0.a.x + D0.b.x) / 2, y: (D0.a.y + D0.b.y) / 2 };
-      let score = Math.abs(f - 0.5);
-      drawn.forEach(o => { if (o === D0) return; for (const [sx, sy] of o.samples) if (Math.abs(sx - q.x) < tw / 2 + 3 && Math.abs(sy - q.y) < 10) { score += 2; break; } });
-      if (pills.some(r => Math.abs(r.x - q.x) < (r.w + tw) / 2 + 4 && Math.abs(r.y - q.y) < 20)) score += 10;
-      if (score < bestScore) { bestScore = score; bestM = q; }
-    }
-    pills.push({ x: bestM.x, y: bestM.y, w: tw });
-    const pg = el('g', { class: 'pill', transform: `translate(${bestM.x},${bestM.y})` }, D0.eg);
-    el('rect', { x: -tw / 2, y: -9, width: tw, height: 18, rx: 9 }, pg);
-    const tt = el('text', { x: 0, y: 4, 'text-anchor': 'middle' }, pg); tt.textContent = label;
-  });
-  g.nodes.forEach(id => { const p = nodesPos.get(id); const gg = glyph(nL, byId[id], p.x, p.y); badges(gg, id); bindNode(gg, id); });
-  if (!g.nodes.length) el('text', {x:20,y:40,class:'flabel'}, vp).textContent = state.query ? 'No word matches this exact spelling.' : 'No rule families at this cutoff.';
-  lastBox = boxes.length ? { w: Math.max(...boxes.map(b => b.x + b.w)), h: Math.max(...boxes.map(b => b.y + b.h)) + G.maxBar + 20 } : null;
-  if (!draw.fitted) { fit(); draw.fitted = true; } else applyView();
-  if (state.sel && nodesPos.has(state.sel)) select(state.sel, true); else { state.sel = null; renderDetail(null); }
+  const [from, to] = cmpPair(), ledger = pairAudit(from, to).perWord, focus = state.query.replace(/^q/, '');
+  netView.draw({graph: g, word: id => byId[id], sections: secs(), scale: state.scale,
+    colour: k => css(secVar(k)), textColour: k => css(secTxt(k)), sectionLabel: k => SEC[k].label, lineColour: css('--line2'), mutedColour: css('--muted'),
+    badgeColours: {left: css('--mn1'), right: css('--m1n')}, pair: [from, to], mass: id => ledger.get(id), tag: massTag,
+    familyText: ids => familyBadge(ids, from, to),
+    ruleLines: e => e.rules.map(ruleLine).join('\n'),
+    // direct view: the rule codes on each link; when they are long (composed routes such as C4+GEDY_AR+KT_CORR, often
+    // with the KT_CORR_O alternative), the shortest route and how many more there are; the tooltip lists them all
+    edgeLabel: e => !(state.query && state.findMode === 'direct') ? e.label : e.rules.length === 1 || e.rules.join(' / ').length <= 24 ? e.rules.join(' / ')
+      : `${[...e.rules].sort((a, b) => a.split('+').length - b.split('+').length || a.length - b.length)[0]} +${e.rules.length - 1}`,
+    emptyText: state.query ? 'No word matches this exact spelling.' : 'No rule families at this cutoff.',
+    fit: !draw.fitted, focus: state.findMode === 'direct' && focus ? focus : null, selected: state.sel});
+  draw.fitted = true;
   drawKey();
   status(null);
-}
-let degL = new Map(), degR = new Map();
-// pairing multiplicity among the words shown: left = the form without the inserted material, right = with it
-function computeDeg(g) { degL = new Map(); degR = new Map(); g.edges.forEach(e => { degR.set(e.s, (degR.get(e.s) || 0) + 1); degL.set(e.t, (degL.get(e.t) || 0) + 1); }); }
-const MAP_TXT = {
-  m11: { short: 'one-to-one', long: '<b>one-to-one</b>' },
-  m1n: { short: 'one word, several forms', long: '<b>one \u2192 several</b> <span class="muted">left word has several partners</span>' },
-  mn1: { short: 'several forms, one word', long: '<b>several \u2192 one</b> <span class="muted">right word has several partners</span>' },
-  mnn: { short: 'many-to-many', long: '<b>many-to-many</b>' }
-};
-function mapClass(e) { const a = degR.get(e.s) || 0, b = degL.get(e.t) || 0; return a > 1 ? (b > 1 ? 'mnn' : 'm1n') : (b > 1 ? 'mn1' : 'm11'); }
-function badges(g, id) {
-  const put = (n, x, v) => { if (n < 2) return; const bg = el('g', { class: 'badge', transform: `translate(${x},${-G.maxBar / 2})` }, g);
-    const t = '\u00d7' + n; const w = t.length * 7.6 + 10; el('rect', { x: -w / 2, y: -9.5, width: w, height: 19, rx: 9.5, fill: css(v) }, bg);
-    const tx = el('text', { x: 0, y: 4.2, 'text-anchor': 'middle' }, bg); tx.textContent = t; };
-  put(degL.get(id) || 0, -22, '--mn1');
-  put(degR.get(id) || 0, G.glyphW + 22, '--m1n');
-}
-
-// ---------- interaction
-function trace(id) {
-  const on = new Set([id]); const eon = new Set();
-  const walk = (x, dir) => { (dir ? G_cur.out : G_cur.inn).get(x)?.forEach(e => { if (!G_cur.edges.includes(e)) return; eon.add(e.s + '>' + e.t); const y = dir ? e.t : e.s; if (!on.has(y)) { on.add(y); walk(y, dir); } }); };
-  walk(id, true); walk(id, false);
-  return { on, eon };
-}
-function paint(on, eon) {
-  vp.classList.add('dim');
-  vp.querySelectorAll('.node').forEach(n => n.classList.toggle('on', on.has(n.dataset.id)));
-  vp.querySelectorAll('.edgeg').forEach(e => { const k = eon.has(e.dataset.s + '>' + e.dataset.t); e.classList.toggle('on', k); });
-}
-function clearHi() {
-  if (state.sel) { const t = trace(state.sel); paint(t.on, t.eon); return; }
-  vp.classList.remove('dim'); vp.querySelectorAll('.on').forEach(x => x.classList.remove('on'));
-}
-function highlightRule(r) {
-  const on = new Set(), eon = new Set();
-  G_cur.edges.forEach(e => { if (e.rules.some(x => x.split('.')[0] === r)) { on.add(e.s); on.add(e.t); eon.add(e.s + '>' + e.t); } });
-  paint(on, eon);
-}
-function bindNode(g, id) {
-  g.addEventListener('mouseenter', () => { if (!state.sel) { const t = trace(id); paint(t.on, t.eon); renderDetail(id, true); } status(id); });
-  g.addEventListener('mouseleave', () => { clearHi(); if (!state.sel) renderDetail(null); status(null); });
-  g.addEventListener('click', ev => { ev.stopPropagation(); select(state.sel === id ? null : id); });
-}
-svg.addEventListener('click', () => { if (!moved) select(null); });
-function select(id, keep) {
-  state.sel = id;
-  if (id && !keep && nodesPos.has(id)) { const p = nodesPos.get(id), sx = view.x + p.x * view.k, sy = view.y + p.y * view.k;
-    if (sx < 40 || sx > svg.clientWidth - 80 || sy < 60 || sy > svg.clientHeight - 60) centerOn(p); }
-  vp.querySelectorAll('.node').forEach(n => n.classList.toggle('sel', n.dataset.id === id));
-  if (id) { const t = trace(id); paint(t.on, t.eon); } else clearHi();
-  renderDetail(id);
 }
 function rowsFor(n) {
   return secs().map(k => `<tr><td><span class="sw" style="background:${css(secVar(k))}"></span>${SEC[k].label}</td><td>${fmt(n.rate[k])}</td><td>${n.count[k]}</td></tr>`).join('');
@@ -1140,11 +974,11 @@ function drawKey() {
     const d = document.createElement('div'); d.innerHTML = `${MAP_TXT[c].long} <span class="muted">(${cnt[c] || 0})</span>`;
     [sv, d].forEach(x => { x.style.cursor = 'default'; x.onmouseenter = () => highlightClass(c); x.onmouseleave = () => clearHi(); ek.appendChild(x); });
   });
-}
-function highlightClass(c) {
-  const on = new Set(), eon = new Set();
-  G_cur.edges.forEach(e => { if (mapClass(e) === c) { on.add(e.s); on.add(e.t); eon.add(e.s + '>' + e.t); } });
-  paint(on, eon);
+  // the ×N badges beside a word: how many partners it has on that side
+  const bs = document.createElementNS(NS, 'svg'); bs.setAttribute('width', 44); bs.setAttribute('height', 16);
+  [[2, '--mn1'], [23, '--m1n']].forEach(([x, v]) => { el('rect', { x, y: 1, width: 19, height: 14, rx: 7, fill: css(v) }, bs); });
+  const bd = document.createElement('div'); bd.innerHTML = '<b>×N</b> <span class="muted">partners on that side of a word: left magenta, right violet</span>';
+  ek.append(bs, bd);
 }
 
 // ---------- sections tab
@@ -1328,7 +1162,9 @@ function secHi(cell, hover) {
 // ---------- translate tab
 const PAGE_SEC = ['HA_early', 'PharmaA', 'HA_late', 'HB_all', 'Bio', 'Stars_h3'];
 const ADJ = new Map();           // word -> [{w, rules, label, two, via}] over every edge and chain, both directions
-D.edges.forEach(e => { (e.forwardOnly?[[e.s,e.t]]:[[e.s, e.t], [e.t, e.s]]).forEach(([a, b]) => { (ADJ.get(a) || ADJ.set(a, []).get(a)).push({ w: b, rules: e.rules.map(r => r.split('.')[0]), codes: e.rules, label: e.label, two: false }); }); });
+// rules: each route code without its step number (C1.2 -> C1); a composed code (ed+GEDY_AR) keeps every rule it needs
+const routeRules = code => GM.ruleParts(code).join('+');
+D.edges.forEach(e => { (e.forwardOnly?[[e.s,e.t]]:[[e.s, e.t], [e.t, e.s]]).forEach(([a, b]) => { (ADJ.get(a) || ADJ.set(a, []).get(a)).push({ w: b, rules: e.rules.map(routeRules), codes: e.rules, label: e.label, two: false }); }); });
 D.chains.forEach(c => { const [a, m, o] = c.path; [[a, o], [o, a]].forEach(([x, y]) => { (ADJ.get(x) || ADJ.set(x, []).get(x)).push({ w: y, rules: [c.rule], codes: [c.rule], label: change2(a, o), two: true, via: m }); }); });
 // forms one rule away that the corpus never attests (or only outside the graph): judged by form, never by frequency
 Object.entries(D.partners || {}).forEach(([k, lst]) => lst.forEach(e => (ADJ.get(k) || ADJ.set(k, []).get(k)).push({ w: e.w, rules: e.rules, codes: e.rules, label: e.label, two: e.two, via: e.via, hyp: true })));
@@ -1436,8 +1272,8 @@ function formP(w, X, Y) {
 }
 function translateWord(key, X, Y, q = '') {
   const parts = new Map();
-  (ADJ.get(key) || []).forEach(p => { if (!p.rules.some(r => state.rules.has(r))) return;
-    const e = parts.get(p.w) || { w: p.w, rules: new Set(), labels: new Set(), two: p.two, via: p.via, hyp: !!p.hyp }; p.rules.forEach(r => state.rules.has(r) && e.rules.add(r)); e.labels.add(p.label); if (!p.two) e.two = false; parts.set(p.w, e); });
+  (ADJ.get(key) || []).forEach(p => { if (!p.rules.some(r => GM.ruleLive(r, state.rules))) return;
+    const e = parts.get(p.w) || { w: p.w, rules: new Set(), labels: new Set(), two: p.two, via: p.via, hyp: !!p.hyp }; p.rules.forEach(r => GM.ruleLive(r, state.rules) && e.rules.add(r)); e.labels.add(p.label); if (!p.two) e.two = false; parts.set(p.w, e); });
   const rX = w => secRate(w, X), rY = w => secRate(w, Y);
   const fall = Math.max(0, rX(key) - rY(key));
   const cands = [{ w: key, keep: true, weight: Math.min(rX(key), rY(key)) }];
@@ -1619,7 +1455,7 @@ function hwRows(c, X, Y) {
 }
 // the rule network around a word: partners within two steps under the enabled rules, bars = from / into sections
 function miniNet(key, X, Y, q = '') {
-  const edges = D.edges.filter(e => e.rules.some(r => state.rules.has(r.split('.')[0])));
+  const edges = D.edges.filter(e => e.rules.some(r => GM.ruleLive(r, state.rules)));
   const nb = new Map(); edges.forEach(e => { [[e.s, e.t], [e.t, e.s]].forEach(([a, b]) => (nb.get(a) || nb.set(a, []).get(a)).push(b)); });
   const tot = w => byId[w] ? byId[w].total : 0;
   const on = new Set([key]); let fr = [key];
@@ -1804,43 +1640,28 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-current', x === t ? 'page' : 'false'));
   state.tab = t.dataset.tab; state.sel = null; state.selCell = null;
   const app = document.querySelector('.app');
-  const workbench = ['residuals', 'distribution', 'contexts', 'lab', 'stages'].includes(state.tab);
+  const workbench = ['residuals', 'distribution', 'contexts', 'patterns', 'lab', 'stages', 'evidence'].includes(state.tab);
   app.classList.toggle('workbenchMode', workbench);
+  app.classList.toggle('evidenceMode', state.tab === 'evidence');
   document.getElementById('workbenchPage').hidden = !workbench;
   const intro = document.getElementById('legacyIntro'); intro.hidden = workbench || state.tab === 'rules';
   const intros = {net:['04 / Follow the correspondences','Rule network','Explore connected forms. Family labels and bar segments follow the comparison chosen in Mass bars; the sidebar always shows all three legs.'], sections:['05 / Compare populations','Across sections','Read frequency shifts between adjacent populations. Family accounting follows the column order and enabled rules.'], translate:['06 / Read a dialect projection','Translate Voynichese','Inspect interlinear alternatives and the evidence behind each suggested form.'], rules:['07 / Inspect the evidence','Rule manager','Definitions, licenses, population-specific findings, and the limits of each correspondence.']};
-  if(!workbench){const [k,h,p]=intros[state.tab];intro.innerHTML=`<div class="wb-eyebrow">${k}</div><h2>${h}</h2><p>${p}</p>`;}
+  if(!workbench){const [k,h,p]=intros[state.tab],share=['net','sections'].includes(state.tab)?'<button class="wb-button" data-share="tab" title="Copy a link that opens this chart with these settings">Share link</button>':'';intro.innerHTML=`<div class="intro-row"><div><div class="wb-eyebrow">${k}</div><h2>${h}</h2><p>${p}</p>${['net','sections'].includes(state.tab)?'<p>Exploratory, q-merged candidate graph. Drawn links do not imply positive credit in the selected sections. For exact-q, strict named-rule comparisons and saved-study gains, open <button class="wb-button" id="openEvidence">Evidence</button>.</p>':''}</div>${share}</div>`;intro.querySelector('#openEvidence')?.addEventListener('click',()=>document.querySelector('[data-tab="evidence"]').click());}
   app.classList.toggle('rulesMode', state.tab === 'rules'); app.classList.toggle('secMode', state.tab === 'sections'); app.classList.toggle('trMode', state.tab === 'translate');
   document.getElementById('trPage').hidden = state.tab !== 'translate';
   document.getElementById('rulesPage').hidden = state.tab !== 'rules';
   document.getElementById('secPage').hidden = state.tab !== 'sections';
-  if (state.tab === 'stages') window.EchoStages?.show(document.getElementById('workbenchPage')); else if (workbench) window.EchoWorkbench?.show(state.tab); else if (state.tab === 'rules') renderRules(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else { draw.fitted = false; draw(); }
+  if (state.tab === 'evidence') window.EchoEvidence.show(document.getElementById('workbenchPage')); else if (state.tab === 'stages') window.EchoStages?.show(document.getElementById('workbenchPage')); else if (workbench) window.EchoWorkbench?.show(state.tab); else if (state.tab === 'rules') renderRules(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else { draw.fitted = false; draw(); }
 });
 function redraw() { if (state.tab === 'stages') window.EchoStages?.refresh(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else if (state.tab === 'net') draw(); }
 // Menus float above the reading area; expanding help must not move the text.
 document.addEventListener('pointerdown',e=>{if(state.tab==='translate')document.querySelectorAll('.trOptions[open],#ruleMenu[open]').forEach(d=>{if(!d.contains(e.target))d.open=false;});});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.tab==='translate')document.querySelectorAll('.trOptions[open],#ruleMenu[open]').forEach(d=>{d.open=false;d.querySelector('summary').focus();});});
 
-// ---------- pan / zoom
-let drag = null, moved = false;
-svg.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; moved = false; svg.classList.add('drag'); });
-window.addEventListener('mousemove', e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 3) moved = true; view.x = drag.vx + dx; view.y = drag.vy + dy; applyView(); });
-window.addEventListener('mouseup', () => { drag = null; svg.classList.remove('drag'); setTimeout(() => moved = false, 0); });
-svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
-function zoomAt(px, py, f) { const k = Math.min(4, Math.max(0.15, view.k * f)); view.x = px - (px - view.x) * k / view.k; view.y = py - (py - view.y) * k / view.k; view.k = k; applyView(); }
-document.getElementById('zin').onclick = () => zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1.25);
-document.getElementById('zout').onclick = () => zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 0.8);
-document.getElementById('zfit').onclick = fit;
-function fit() {
-  if (!lastBox) return; const W = svg.clientWidth, H = svg.clientHeight;
-  // An incident-only search should open on its requested word, not an incoming
-  // peripheral form at the top of a tall component. Pan/zoom remains available.
-  const focus=state.query.replace(/^q/,'');
-  if(state.findMode==='direct'&&focus&&nodesPos.has(focus)){view.k=.8;const p=nodesPos.get(focus);view.x=W/2-(p.x+G.glyphW/2)*view.k;view.y=H/2-(p.y-20)*view.k;applyView();return;}
-  view.k = Math.max(0.5, Math.min(1.1, (W - 40) / (lastBox.w + 20)));
-  view.x = 20; view.y = 16 + 34 * view.k; applyView();
-}
-function centerOn(p) { view.k = Math.max(view.k, 1); view.x = svg.clientWidth / 2 - (p.x + G.glyphW / 2) * view.k; view.y = svg.clientHeight / 2 - (p.y - 30) * view.k; applyView(); }
+// ---------- zoom buttons (drag to pan and wheel zoom are in network_view.js)
+document.getElementById('zin').onclick = () => netView.zoom(1.25);
+document.getElementById('zout').onclick = () => netView.zoom(0.8);
+document.getElementById('zfit').onclick = () => netView.fit();
 
 // ---------- export
 document.getElementById('dl').onclick = () => {
@@ -1852,19 +1673,20 @@ document.getElementById('dl').onclick = () => {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' })); a.download = 'echo_rule_network.svg'; a.click();
 };
 window.addEventListener('resize', () => { if (state.tab === 'net') { draw.fitted = false; draw(); } });
-draw();
+if (VS.decode(location.hash)?.tab === 'evidence') initialLinkApplied = applyLink(location.hash);
+if (!initialLinkApplied) draw();
 })();
 </script>
 <script src="workbench_data.js?v=9eff70fcff"></script>
 <script src="manuscript_data.js?v=5a4b98f56d"></script>
 <script src="stage_data.js?v=35826460f3"></script>
 <script src="fit_data.js?v=edce679302"></script>
-<script src="fit_core.js?v=be9d504f5f"></script>
-<script src="workbench_core.js?v=d585203b1f"></script>
-<script src="page_chart.js?v=2e100d01a5"></script>
+<script src="fit_core.js?v=c079da9d91"></script>
+<script src="workbench_core.js?v=598834a7ac"></script>
+<script src="page_chart.js?v=08dad248cc"></script>
 <script src="context_statistics.js?v=147218c350"></script>
-<script src="workbench.js?v=b1642e4c64"></script>
-<script src="stage_flow.js?v=406aae70f1"></script>
-<script src="stage_view.js?v=d815509c89"></script>
+<script src="workbench.js?v=4994669608"></script>
+<script src="stage_flow.js?v=d390084f5d"></script>
+<script src="stage_view.js?v=e7bfb4fdd8"></script>
 </body>
 </html>

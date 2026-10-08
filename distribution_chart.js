@@ -33,9 +33,12 @@
   function mount(host, allRows, config={}) {
     const rows=allRows.filter(r=>Math.max(r.before,r.after,r.target)>EPS), totals=summary(allRows);let d=domain(rows);
     const source=config.source||'Herbal A',target=config.target||'Herbal B';
-    let selected='', showChanged=false, labelCount=12, minimum=0, basis='either';
+    // Display settings start from config.view (a shared link) and are reported through config.onView on every change.
+    const start=config.view||{};
+    let selected=start.word||'', showChanged=!!start.changed, labelCount=[0,12,30].includes(start.labels)?start.labels:12, minimum=Math.max(0,+start.min||0), basis=['either','both','source','target'].includes(start.basis)?start.basis:'either';
+    const view=()=>({word:selected,changed:showChanged,labels:labelCount,min:minimum,basis}), changed=()=>config.onView?.(view());
     // The chart describes the complete evaluation, independent of ledger filters.
-    host.innerHTML=`<div class="wb-card distribution-card"><div class="wb-row-title"><div><div class="wb-eyebrow">Distribution repair</div><h3>How close do the word frequencies become?</h3></div><span class="wb-badge neutral">${esc(config.policy||'Applied rules')}</span></div>
+    host.innerHTML=`<div class="wb-card distribution-card"><div class="wb-row-title"><div><div class="wb-eyebrow">Distribution repair</div><h3>How close do the word frequencies become?</h3></div><span class="wb-actions">${config.actions||''}<span class="wb-badge neutral">${esc(config.policy||'Applied rules')}</span></span></div>
       <p class="wb-caption">Each point is one q-merged word form. Points on the diagonal have equal source and target rates. Compare the same words before and after applying the policy.</p>
       <div class="overlap-summary"><div><strong>${fmt(totals.before/100)}% → ${fmt(totals.after/100)}%</strong><span>word-frequency overlap</span></div><div><strong>${fmt(totals.repaired*100)}%</strong><span>of the original mismatch repaired, net</span></div><div><strong>+${fmt(totals.gained)} / −${fmt(totals.lost)}</strong><span>overlap gained / lost per 10k</span></div></div>
       <div class="overlap-bars" aria-label="Before and after overlap"><div><span>Before</span><div class="overlap-track"><i style="width:${Math.min(100,totals.before/100)}%"></i></div><b>${fmt(totals.before/100)}%</b></div><div><span>After</span><div class="overlap-track"><i style="width:${Math.min(100,totals.after/100)}%"></i></div><b>${fmt(totals.after/100)}%</b></div></div>
@@ -51,7 +54,7 @@
     function element(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!=null)e.textContent=text;parent.appendChild(e);return e;}
     function inspect(word,pin=false) {
       const r=byWord.get(word);
-      if(pin){selected=word;host.querySelector('.chart-find').value=word;}
+      if(pin){selected=word;host.querySelector('.chart-find').value=word;changed();}
       // Touch only the old/new selection, not every vocabulary node on hover.
       highlighted.forEach(e=>e.classList.remove('selected'));
       hiddenLabels.forEach(e=>e.style.display='');selectedLabels.forEach(e=>e.remove());selectedLabels=[];
@@ -123,11 +126,14 @@
       if(selected)inspect(selected);else inspector.textContent=visible.length?'Hover or click a point to inspect a word.':'No forms meet these filters. Lower the minimum frequency.';
     }
     host.querySelector('.chart-find').addEventListener('input',e=>inspect(e.target.value.trim().replace(/^q/,''),true));
-    host.querySelector('.chart-changed').addEventListener('change',e=>{showChanged=e.target.checked;render();});
-    host.querySelector('.chart-labels').addEventListener('change',e=>{labelCount=+e.target.value;render();});
-    host.querySelector('.chart-min').addEventListener('change',e=>{minimum=Math.max(0,Number(e.target.value)||0);e.target.value=minimum;render();});
-    host.querySelector('.chart-basis').addEventListener('change',e=>{basis=e.target.value;render();});
+    host.querySelector('.chart-changed').addEventListener('change',e=>{showChanged=e.target.checked;render();changed();});
+    host.querySelector('.chart-labels').addEventListener('change',e=>{labelCount=+e.target.value;render();changed();});
+    host.querySelector('.chart-min').addEventListener('change',e=>{minimum=Math.max(0,Number(e.target.value)||0);e.target.value=minimum;render();changed();});
+    host.querySelector('.chart-basis').addEventListener('change',e=>{basis=e.target.value;render();changed();});
+    host.querySelector('.chart-find').value=selected;host.querySelector('.chart-changed').checked=showChanged;
+    host.querySelector('.chart-labels').value=String(labelCount);host.querySelector('.chart-min').value=minimum;host.querySelector('.chart-basis').value=basis;
     render();
+    return {view};
   }
   const api={summary,domain,coordinate,frequencyFilter,mount};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.EchoDistributionChart=api;

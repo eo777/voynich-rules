@@ -20,6 +20,27 @@
   // Late Herbal A when the late A + pharma regime is split (pharma keeps the joint regime's colour). Checked against
   // every other regime colour and the grey for colour-blind separation (OKLab dE >= 14 in both themes).
   const LATE_A_COLOUR = '--rgLA';
+  // The Herbal B regime's non-herbal pages (text-only and cosmological: f66r, f85r1, f85r2, f86v3-f86v6) in Golf regime +.
+  // Checked like late A against every regime colour and the grey (OKLab dE x100, simulated protan / deutan / tritan vision):
+  // dark theme #47dcfd, >= 14.5 dichromat and >= 18.0 normal; light theme #b13d75, >= 11.7 dichromat (Stars, protan) and
+  // >= 17.8 normal (Celestial). In the light theme only near-black colours clear 14, and those read as text.
+  const HB_OTHER_COLOUR = '--rgBX';
+  // Golf's regime numbers, in Golf's order (1, 2, 3a, 3b, 4, 5, 6), as published with the regimes (Voynich Ninja thread 6084)
+  const GOLF_NUMBERS = {earlyA: '1', lateAP: '2', HB: '3a', Stars: '3b', Bio: '4', Cel: '5', f58: '6'};
+  // Golf's two within-regime subdivisions (team_golf/page_js_maps_20261006: compare_subdivisions.py and RESULTS.md,
+  // 7 October 2026), used by Golf regime ++. Inside regime 1 the page-level Ward root separates 37 pages with more
+  // ch/sh-initial words from 49 with more y-initial words; inside 3b it separates the nine Stars pages that join Bio in
+  // the global tree from the fourteen that join Herbal B. Golf reads both as tendencies at page and sheet scale, not
+  // new regimes, so both parts keep the regime's number and colour; the second part is striped (`hatch`). `pages`
+  // lists the `listed` part; the regime's other pages form the other. Golf's 37 also include f1r, which the app's
+  // regimes leave without a regime.
+  const GOLF_SUBDIVISIONS = {
+    earlyA: {parts: ['earlyA_ch', 'earlyA_y'], listed: 'earlyA_ch', labels: {earlyA_ch: 'early A, ch-start', earlyA_y: 'early A, y-start'},
+      pages: ['f1r', 'f1v', 'f2v', 'f4v', 'f5r', 'f7r', 'f7v', 'f8r', 'f8v', 'f15r', 'f15v', 'f20r', 'f20v', 'f21r', 'f21v', 'f25v', 'f27r', 'f28r', 'f28v',
+        'f29r', 'f29v', 'f30r', 'f30v', 'f32r', 'f32v', 'f35r', 'f35v', 'f38r', 'f38v', 'f42r', 'f42v', 'f44v', 'f47r', 'f47v', 'f49r', 'f49v', 'f56r']},
+    Stars: {parts: ['Stars_hb', 'Stars_bio'], listed: 'Stars_bio', labels: {Stars_hb: 'Stars, near Herbal B', Stars_bio: 'Stars, near Bio'},
+      pages: ['f103r', 'f103v', 'f108r', 'f108v', 'f111r', 'f111v', 'f112r', 'f112v', 'f116r']},
+  };
   const quireNumber = q => q.charCodeAt(0) - 64;                       // transliteration quire letters: A = quire 1
   const rzClass = code => code ? code.replace(/[+\-]+$/, '') : null;   // RZ q-frequency modifiers (+ / -) are dropped
 
@@ -38,14 +59,32 @@
       return {mode, groups, keyOf: (line, page) => keyOfPage(page) ?? 'none'};
     };
     if (mode === 'section') return byPage(p => p.section, Object.keys(manuscript.section_names), k => manuscript.section_names[k], k => SECTION_COLOURS[k], 'No section');
-    if (mode === 'regime' || mode === 'regimeSplit') {
-      const keys = manuscript.regimes.map(r => r.key), colours = opts.regimeColours || [];
-      const label = k => manuscript.regimes[keys.indexOf(k)].label, colour = k => colours[keys.indexOf(k)];
+    if (mode === 'regime' || mode === 'regimeSplit' || mode === 'regimeSplit2') {
+      // Golf's own regime numbers (npcompl33t, Voynich Ninja thread 6084; team_golf/LANGUAGES.md), in Golf's order;
+      // colours stay with their regime (opts.regimeColours follows the manuscript's regime list)
+      const order = manuscript.regimes.map(r => r.key), colours = opts.regimeColours || [];
+      const rank = k => GOLF_NUMBERS[k] ? Object.keys(GOLF_NUMBERS).indexOf(k) : Infinity;
+      const keys = [...order].sort((a, b) => rank(a) - rank(b) || order.indexOf(a) - order.indexOf(b));
+      const num = k => GOLF_NUMBERS[k] || '', colour = k => colours[order.indexOf(k)];
+      const named = (k, text) => num(k) ? `${num(k)}: ${text}` : text;
+      const label = k => named(k, manuscript.regimes[order.indexOf(k)].label);
       if (mode === 'regime') return byPage(p => p.regime, keys, label, colour, 'No regime');
-      // late A + pharma split by illustration: pharmaceutical pages are Pharma, the rest late Herbal A
-      const JOINT = 'lateAP', names = {lateA: 'late Herbal A', pharma: 'Pharma'}, own = {lateA: LATE_A_COLOUR, pharma: colour(JOINT)};
-      return byPage(p => p.regime === JOINT ? (p.section === 'P' ? 'pharma' : 'lateA') : p.regime,
-        keys.flatMap(k => k === JOINT ? ['lateA', 'pharma'] : [k]), k => names[k] || label(k), k => own[k] || colour(k), 'No regime');
+      // Golf regime +, two regimes split by illustration, both parts keeping their regime's number: late A + pharma into
+      // late Herbal A and Pharma (pharmaceutical pages); Herbal B into Herbal B (herbal pages) and its non-herbal pages
+      const JOINT = 'lateAP', names = {lateA: named(JOINT, 'late Herbal A'), pharma: named(JOINT, 'Pharma'), HBx: named('HB', 'non-herbal pages')};
+      const own = {lateA: LATE_A_COLOUR, pharma: colour(JOINT), HBx: HB_OTHER_COLOUR};
+      const plus = p => p.regime === JOINT ? (p.section === 'P' ? 'pharma' : 'lateA') : p.regime === 'HB' && p.section !== 'H' ? 'HBx' : p.regime;
+      const plusKeys = keys.flatMap(k => k === JOINT ? ['lateA', 'pharma'] : k === 'HB' ? ['HB', 'HBx'] : [k]);
+      if (mode === 'regimeSplit') return byPage(plus, plusKeys, k => names[k] || label(k), k => own[k] || colour(k), 'No regime');
+      // Golf regime ++: Golf regime + with regime 1 and 3b each in their two parts (GOLF_SUBDIVISIONS). Both parts keep the
+      // regime's number and colour; the second part is striped, so twelve groups need no new hues.
+      const SUB = GOLF_SUBDIVISIONS, parent = {}, subName = {};
+      for (const [k, s] of Object.entries(SUB)) for (const part of s.parts) { parent[part] = k; subName[part] = named(k, s.labels[part]); }
+      const twoWay = p => { const s = SUB[p.regime]; return s ? (s.pages.includes(p.folio) ? s.listed : s.parts.find(x => x !== s.listed)) : plus(p); };
+      const group = byPage(twoWay, plusKeys.flatMap(k => SUB[k] ? SUB[k].parts : [k]), k => subName[k] || names[k] || label(k),
+        k => own[k] || colour(parent[k] || k), 'No regime');
+      for (const g of group.groups) if (parent[g.key] && SUB[parent[g.key]].parts[1] === g.key) g.hatch = true;
+      return group;
     }
     if (mode === 'rz') return byPage(p => rzClass(p.rz), Object.keys(RZ_COLOURS), k => RZ_LABELS[k], k => RZ_COLOURS[k], 'No RZ code');
     if (mode === 'currier') return byPage(p => p.lang || null, ['A', 'B'], k => 'Currier ' + k, k => CURRIER_COLOURS[k], 'Not classified');
@@ -66,14 +105,28 @@
     return {mode, groups, both, keyOf};
   }
 
+  // Groups left out of a view (by key): the grouping without them, and `keep(line)` for the text that stays, a line
+  // staying when its own group (its page's, or its hand on a split page) is shown. Filtering lines and matches with
+  // `keep` removes the hidden groups from the units, the chart and the table; the total row then covers the groups
+  // shown. Hiding every group is refused (the view would be empty).
+  function hideGroups(group, hidden = [], pages = []) {
+    // keys that name no group of this grouping (from another Color by, or an old link) hide nothing
+    const out = new Set(hidden.map(String)), gone = group.groups.filter(g => out.has(String(g.key))), shown = group.groups.filter(g => !out.has(String(g.key)));
+    if (!gone.length || !shown.length) return {group, keep: () => true, hidden: []};
+    const members = new Set(shown.flatMap(g => g.members.map(String))), pageOf = new Map(pages.map(p => [p.folio, p]));
+    return {group: {...group, groups: shown, totalLabel: 'Shown groups'}, hidden: gone.map(g => g.key),
+      keep: line => members.has(String(group.keyOf(line, pageOf.get(line.folio))))};
+  }
+
   // Units and their readable words, text lines and matches per group. 'page': one unit per page. 'paragraph': the
   // paragraph lines of each page in locus order, a new unit at every paragraph-initial line, and one more unit per
-  // page for all its other loci in scope (labels, circles, radii). 'quire': one unit per quire, in the order of its
-  // first page; its `page` lists the quire's pages. A line's group always comes from its own page, so a quire whose
-  // pages fall in different groups is split between them. `matches` are occurrences from the search engine.
+  // page for all its other loci in scope (labels, circles, radii). 'bifolium': one unit per physical sheet (Golf's
+  // `sheet`, a foldout counting as one) and 'quire': one unit per quire, each in the order of its first page; its
+  // `page` lists its pages. A line's group always comes from its own page, so a sheet or quire whose pages fall in
+  // different groups is split between them. `matches` are occurrences from the search engine.
   function unitModel(pages, lines, matches, group, unit = 'page') {
-    if (!['page', 'paragraph', 'quire'].includes(unit)) throw new Error('Unknown unit: ' + unit);
-    const pageAt = new Map(pages.map((p, i) => [p.folio, i])), byPage = new Map(), rows = [], rowOf = new Map(), quires = new Map();
+    if (!['page', 'paragraph', 'bifolium', 'quire'].includes(unit)) throw new Error('Unknown unit: ' + unit);
+    const pageAt = new Map(pages.map((p, i) => [p.folio, i])), byPage = new Map(), rows = [], rowOf = new Map(), bundles = new Map();
     const id = l => l.folio + '|' + l.locus;
     const make = (page, index, kind, n) => ({page, index, kind, n, tokens: {}, lines: {}, matches: {}, totalTokens: 0, totalLines: 0, totalMatches: 0});
     for (const l of lines) {
@@ -84,9 +137,15 @@
     pages.forEach((p, i) => {
       const own = byPage.get(p.folio) || [];
       if (unit === 'page') { const r = make(p, i, 'page', 0); rows.push(r); own.forEach(l => rowOf.set(id(l), r)); return; }
-      if (unit === 'quire') {
-        let r = quires.get(p.quire);
-        if (!r) { r = make({folio: p.folio, quire: p.quire, pages: []}, i, 'quire', quireNumber(p.quire)); quires.set(p.quire, r); rows.push(r); }
+      if (unit === 'quire' || unit === 'bifolium') {
+        const at = unit === 'quire' ? p.quire : p.sheet;
+        if (!at) throw new Error(`No ${unit} for ${p.folio}`);
+        let r = bundles.get(at);
+        if (!r) {
+          r = unit === 'quire' ? make({folio: p.folio, quire: p.quire, pages: []}, i, 'quire', quireNumber(p.quire))
+            : make({folio: p.folio, sheet: p.sheet, quire: p.quire, pages: []}, i, 'bifolium', bundles.size + 1);
+          bundles.set(at, r); rows.push(r);
+        }
         r.page.pages.push(p); r.page.last = p.folio; own.forEach(l => rowOf.set(id(l), r)); return;
       }
       const ordered = own.map((l, k) => [l, k]).sort((a, b) => locus(a[0]) - locus(b[0]) || a[1] - b[1]).map(x => x[0]);
@@ -110,7 +169,7 @@
     return rows;
   }
   const pageModel = (pages, lines, matches, group) => unitModel(pages, lines, matches, group, 'page');
-  const unitName = (r, short = false) => r.kind === 'quire' ? 'Q' + r.n : r.kind === 'para' ?`${r.page.folio} ¶${r.n}` : r.kind === 'other' ? `${r.page.folio}${short ? ' other' : ' · other loci'}` : r.page.folio;
+  const unitName = (r, short = false) => r.kind === 'quire' ? 'Q' + r.n : r.kind === 'bifolium' ? r.page.sheet : r.kind === 'para' ?`${r.page.folio} ¶${r.n}` : r.kind === 'other' ? `${r.page.folio}${short ? ' other' : ' · other loci'}` : r.page.folio;
 
   // Display order of units: manuscript (pages in order, paragraphs within them) or bifolia together, sheets in order
   // of their first page.
@@ -169,9 +228,9 @@
         per10k: tokens ? 1e4 * matches / tokens : null, perLine: lines ? matches / lines : null,
         share: totalMatches ? matches / totalMatches : null, median: med != null && measure === 'per10k' ? 1e4 * med : med, best};
     };
-    const out = group.groups.map(g => ({...summarize(g.key, g.label, g.members), colour: g.colour, members: g.members, role: g.role}));
+    const out = group.groups.map(g => ({...summarize(g.key, g.label, g.members), colour: g.colour, hatch: g.hatch, members: g.members, role: g.role}));
     const all = [...new Set(group.groups.flatMap(g => g.members).concat(group.both ? ['both'] : []))];
-    return {rows: out, total: summarize('total', 'Whole manuscript', all), totalMatches};
+    return {rows: out, total: summarize('total', group.totalLabel || 'Whole manuscript', all), totalMatches};
   }
 
   // Pearson's r of two equal-length samples; null below three pairs or when either sample is constant.
@@ -240,7 +299,7 @@
       for (const r of units) { const t = sum(g.members, r.tokens); if (t) values.push(measureOf(measure, sum(g.members, r.matches), t, sum(g.members, r.lines))); }
       return values;
     };
-    const series = group.groups.map(g => ({key: g.key, label: g.label, colour: g.colour, values: valuesOf(rows, g), valuesC: compare ? valuesOf(compare, g) : null}))
+    const series = group.groups.map(g => ({key: g.key, label: g.label, colour: g.colour, hatch: g.hatch, values: valuesOf(rows, g), valuesC: compare ? valuesOf(compare, g) : null}))
       .filter(s => s.values.length);
     const nz = series.flatMap(s => s.values.concat(s.valuesC || [])).filter(v => v > 0).sort((a, b) => a - b), max = nz.length ? nz[nz.length - 1] : 0;
     // Outliers: above the 95th percentile with 20 or more units with matches; with 5-19, beyond 3 IQR above the
@@ -284,21 +343,22 @@
   }
 
   // x-axis labels: folio numbers (f1, f10, f20 ... restarting in each facet) or, in bifolium order, sheet names at
-  // the first page of each sheet. Labels closer than their own width to the previous one are skipped.
-  function axisLabels(columns, facets, ordering, xOf) {
+  // the first page of each sheet; bifolium and quire units are labelled by name. Labels closer than their own width
+  // to the previous one, or running past `right` (the plot's edge), are skipped.
+  function axisLabels(columns, facets, ordering, xOf, right = Infinity) {
     const out = [];
     for (const f of facets) {
       let next = null;
       for (let c = f.start; c < f.end; c++) {
         const p = columns[c].row.page;
-        if (columns[c].row.kind === 'quire') { out.push({c, label: unitName(columns[c].row)}); continue; }
+        if (columns[c].row.kind === 'quire' || columns[c].row.kind === 'bifolium') { out.push({c, label: unitName(columns[c].row)}); continue; }
         if (ordering === 'bifolium') { if (c === f.start || p.sheet !== columns[c - 1].row.page.sheet) out.push({c, label: p.sheet}); continue; }
         const n = parseInt((p.folio.match(/^f(\d+)/) || [])[1], 10);
         if (c === f.start || n >= next) { out.push({c, label: 'f' + n}); next = n < 10 ? 10 : Math.floor(n / 10) * 10 + 10; }
       }
     }
     let last = -1e9;
-    return out.filter(t => { const x = xOf(t.c), w = t.label.length * 5.6 + 8; if (x - last < w) return false; last = x; return true; });
+    return out.filter(t => { const x = xOf(t.c), w = t.label.length * 5.6 + 8; if (x - last < w || x + w - 8 > right) return false; last = x; return true; });
   }
 
   // ------------------------------------------------------------------ drawing
@@ -309,17 +369,88 @@
   const per10kText = x => x == null ? '—' : !x ? '0' : x >= 100 ? num(Math.round(x)) : x.toFixed(x >= 10 ? 1 : 2);
   const plain = v => num(+v.toFixed(4));       // axis ticks and bin edges: round numbers, no trailing zeros
   const fill = c => `fill:var(${c})`;
-  const MODE_NAMES = {section: 'section', regime: 'Golf regime', regimeSplit: 'Golf regime', rz: 'RZ language', currier: 'Currier language', hand: 'LFD hand', comparison: 'comparison'};
-  const UNITS = {page: {one: 'page', many: 'pages'}, paragraph: {one: 'paragraph', many: 'paragraphs'}, quire: {one: 'quire', many: 'quires'}};
-  const abbrev = (text, n = 28) => text.length > n ? text.slice(0, n - 1) + '…' : text;
-  let observer = null;
+  // A group's paint: its colour, or for a striped (hatch) group its colour in diagonal stripes. paint() is a CSS
+  // background for HTML swatches and bars. In SVG, svgPaint() fills with a pattern that hatchDefs() defines under ids
+  // unique to that drawing, since several charts can share a page.
+  const paint = g => g.hatch ? `background:repeating-linear-gradient(135deg,var(${g.colour}) 0 2px,transparent 2px 4px)` : `background:var(${g.colour})`;
+  let hatchSeq = 0;
+  const hatchIds = () => { const n = ++hatchSeq; return key => `pc-hatch-${n}-${String(key).replace(/[^\w-]/g, '_')}`; };
+  const hatchDefs = (groups, id) => groups.filter(g => g.hatch).map(g => `<pattern id="${id(g.key)}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" style="${fill(g.colour)}"/></pattern>`).join('');
+  const svgPaint = (g, id) => g.hatch ? `fill:url(#${id(g.key)})` : fill(g.colour);
+  const MODE_NAMES = {section: 'section', regime: 'Golf regime', regimeSplit: 'Golf regime +', regimeSplit2: 'Golf regime ++', rz: 'RZ language', currier: 'Currier language', hand: 'LFD hand', comparison: 'comparison'};
+  const UNITS = {page: {one: 'page', many: 'pages'}, paragraph: {one: 'paragraph', many: 'paragraphs'}, bifolium: {one: 'bifolium', many: 'bifolia'},
+    quire: {one: 'quire', many: 'quires'}};
+  // A pattern label cut to about n characters at a whole term: back to the last space, then without a trailing
+  // operator (AND, OR, NOT, &, |, !, an opening parenthesis), so it never ends on a bare connector; … marks the cut.
+  // Shared by the chart's labels and the pattern comparison's column heads.
+  function cutLabel(text, n = 28) {
+    text = String(text ?? '');
+    if (text.length <= n) return text;
+    let cut = text.slice(0, n - 1);
+    const space = cut.lastIndexOf(' ');
+    if (space > n / 2) cut = cut.slice(0, space);
+    return cut.replace(/(?:\s+(?:AND|OR|NOT)|\s*[&|!(])+\s*$/, '').trimEnd() + '…';
+  }
+  // The caption under the bars is one SVG line; when it is wider than `room` (long patterns, a narrow window) it
+  // breaks after its separators (' · ', '; ') into lines, and the SVG grows to hold them.
+  function wrapCaption(cap, room, H) {
+    if (!cap || !cap.getComputedTextLength || cap.getComputedTextLength() <= room) return;
+    const lines = [''];
+    for (const part of cap.textContent.split(/(?<= · |; )/)) {
+      cap.textContent = lines[lines.length - 1] + part;
+      if (lines[lines.length - 1] && cap.getComputedTextLength() > room) lines.push(part); else lines[lines.length - 1] += part;
+    }
+    const x = cap.getAttribute('x'), svg = cap.ownerSVGElement, step = 13, height = H + step * (lines.length - 1);
+    cap.textContent = '';
+    lines.forEach((line, i) => {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      t.setAttribute('x', x); if (i) t.setAttribute('dy', step);
+      t.textContent = line.replace(/\s*·\s*$/, '').trim(); cap.appendChild(t);
+    });
+    svg.setAttribute('height', height); svg.setAttribute('viewBox', `0 0 ${svg.getAttribute('width')} ${height}`);
+  }
+  // One resize observer per chart slot: re-mounting a slot (the app redraws its one chart) releases the old one, and
+  // the viewer gives each of its charts a slot of its own.
+  const observers = new Map();
+
+  // Table cells, shared by the Matches by page table and the pattern comparison table. A group's value under a
+  // measure is pooled over the group (statistics()); its text follows the measure.
+  const MEASURE_VALUE = {count: s => s.matches, percent: s => s.rate || 0, per10k: s => s.per10k || 0, perline: s => s.perLine || 0};
+  const MEASURE_TEXT = {count: s => num(s.matches), percent: s => pctText(s.rate), per10k: s => per10kText(s.per10k), perline: s => lineText(s.perLine)};
+  const swatch = s => `<i class="pc-sw" style="${paint(s)}"></i>`;
+  // An inline bar on a scale shared by the columns it is compared with (`max`); rows without a colour, the whole
+  // manuscript, get none.
+  const inlineBar = (measure, s, max, cmp = false) => s.colour ? `<span class="pc-ib${cmp ? ' pc-cmp' : ''}"><i style="width:${(100 * MEASURE_VALUE[measure](s) / max).toFixed(1)}%;${paint(s)}"></i></span>` : '';
+  // The value in a box as wide as the column's longest value, so the bars before it start at one margin however many
+  // digits a row has.
+  const valueBox = (measure, s, width) => `<span class="pc-num" style="min-width:${width}ch">${MEASURE_TEXT[measure](s)}</span>`;
+  const valueWidth = (measure, stats) => 1 + Math.max(...stats.map(s => MEASURE_TEXT[measure](s).length));
+
+  // Several patterns side by side: one row per group and one for the whole manuscript, one column per pattern, each
+  // cell the group's value under the measure with its inline bar. The bar scale is the largest group value of the
+  // whole table (scale 'table', as the two columns of a comparison in the Matches by page table share one), or of
+  // each column (scale 'column', for patterns of very different frequency). `series`: [{stats (statistics() of that
+  // pattern, same grouping), head (header HTML, escaped by the caller), title (header tooltip)}].
+  function seriesTable(series, measure = 'count', opts = {}) {
+    if (!series.length) return '';
+    const rows = series[0].stats.rows, everyRow = series.flatMap(x => [...x.stats.rows, x.stats.total]);
+    const columnMax = x => Math.max(1e-12, ...x.stats.rows.map(MEASURE_VALUE[measure])), tableMax = Math.max(...series.map(columnMax));
+    const maxOf = x => opts.scale === 'column' ? columnMax(x) : tableMax;
+    const width = valueWidth(measure, everyRow);
+    // an empty last cell takes the spare width, so the columns sit next to the group names
+    const cells = pick => series.map(x => { const s = pick(x.stats); return `<td class="pc-m">${inlineBar(measure, s, maxOf(x))}${valueBox(measure, s, width)}</td>`; }).join('') + '<td class="pt-fill"></td>';
+    const body = rows.map((g, i) => `<tr data-g="${esc(g.key)}"><td class="pc-name">${swatch(g)}${esc(g.label)}</td>${cells(st => st.rows[i])}</tr>`).join('')
+      + `<tr class="pc-total" data-g="total"><td class="pc-name">${esc(series[0].stats.total.label)}</td>${cells(st => ({...st.total, colour: null}))}</tr>`;
+    return `<div class="wb-scroll pc-tablewrap"><table class="wb-table pc-table pt-table"><thead><tr><th>Group</th>${series.map(x => `<th class="pt-head" title="${esc(x.title || '')}">${x.head}</th>`).join('')}<th class="pt-fill" aria-hidden="true"></th></tr></thead><tbody>${body}</tbody></table></div>`;
+  }
 
   // `compare` ({matches, query}) draws a second pattern on the same chart: its bars hang below the axis, its
   // histograms below each panel's axis, and the table adds its value next to the measure shown.
   function mount(el, opts) {
-    if (observer) { observer.disconnect(); observer = null; }
     const {pages, lines, matches, group, measure = 'count', ordering = 'manuscript', layout = 'combined', unit = 'page', highlight = {}, names = {}, binning = {},
-      compare = null, query = ''} = opts;
+      compare = null, query = '', slot = 'page', showTable = true, labelLength = 28} = opts;
+    const abbrev = text => cutLabel(text, labelLength);
+    observers.get(slot)?.disconnect(); observers.delete(slot);
     const rows = unitModel(pages, lines, matches, group, unit), stats = statistics(rows, group, measure);
     const rowsC = compare ? unitModel(pages, lines, compare.matches, group, unit) : null, statsC = compare ? statistics(rowsC, group, measure) : null;
     if (rowsC) rows.forEach((r, i) => { r.cmp = rowsC[i]; });          // same units in the same order, counted for the comparison
@@ -329,8 +460,8 @@
     const hist = histogram ? histograms(rows, group, measure, {...binning, compare: rowsC}) : null, keys = drawKeys(group);
     const U = UNITS[unit];
     const above = abbrev(query || '(all)'), below = compare ? abbrev(compare.query || '(all)') : '';
-    const colourOf = k => (group.groups.find(g => g.key === k) || {}).colour || OTHER;
-    const keyFill = k => k === 'both' ? 'fill:url(#pc-both)' : fill(colourOf(k));
+    const groupOf = k => group.groups.find(g => g.key === k) || {colour: OTHER}, hatchId = hatchIds();
+    const keyFill = k => k === 'both' ? 'fill:url(#pc-both)' : svgPaint(groupOf(k), hatchId);
     const groupName = k => k === 'both' ? group.both.label : (group.groups.find(g => g.key === k) || {}).label;
     const per = c => measure === 'percent' ? colTokens(c) || 1 : measure === 'per10k' ? (colTokens(c) || 1) / 1e4
       : measure === 'perline' ? colLines(c) || 1 : 1;
@@ -345,14 +476,14 @@
     const dominant = c => c.keys.reduce((best, k) => (c.row.tokens[k] || 0) > (c.row.tokens[best] || 0) ? k : best, c.keys[0]);
     let pinned = null, xOf = () => 0, pitch = 1, histLayout = null;
 
-    el.innerHTML = `<div class="pc-readout" aria-live="polite"></div><div class="pc-plot"></div>${table()}`;
+    el.innerHTML = `<div class="pc-readout" aria-live="polite"></div><div class="pc-plot"></div>${showTable ? table() : ''}`;
     const plot = el.querySelector('.pc-plot'), readout = el.querySelector('.pc-readout');
     const render = () => (histogram ? drawHistograms() : draw());
     render();
     if (typeof ResizeObserver !== 'undefined') {
       let width = plot.clientWidth;
-      observer = new ResizeObserver(() => { if (Math.abs(plot.clientWidth - width) > 4) { width = plot.clientWidth; render(); } });
-      observer.observe(plot);
+      const observer = new ResizeObserver(() => { if (Math.abs(plot.clientWidth - width) > 4) { width = plot.clientWidth; render(); } });
+      observer.observe(plot); observers.set(slot, observer);
     }
     bindTable();
     say(null);
@@ -372,8 +503,9 @@
       const upC = compare ? Math.max(step, Math.ceil(maxC / step - 1e-9) * step) : 0;
       const sc = plotH / (upS + upC), base = top + sc * upS, bottom = base + sc * upC, H = bottom + 74;
       const y = v => base - sc * v, yC = v => base + sc * v;
-      const order = ordering === 'bifolium' ? 'bifolia together' : unit === 'quire' ? 'in quire order' : 'in page order';
+      const order = ordering === 'bifolium' ? 'bifolia together' : unit === 'quire' ? 'in quire order' : unit === 'bifolium' ? 'in order of their first page' : 'in page order';
       let svg = `<svg class="pc-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`Bars: ${measureName}${compare ? `, ${above} above the axis and ${below} below it` : ''}, ${order}${layout === 'split' ? ', split by ' : ', colored by '}${MODE_NAMES[group.mode] || group.mode}. The table below gives the totals by group.`)}">`;
+      if (group.groups.some(g => g.hatch)) svg += `<defs>${hatchDefs(group.groups, hatchId)}</defs>`;
       if (group.both) svg += `<defs><pattern id="pc-both" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" style="${fill(group.both.colours[0])}"/><rect x="2" width="2" height="4" style="${fill(group.both.colours[1])}"/></pattern></defs>`;
       // location filters are shown, not applied: marked above the plot and under the band (a column would read as a bar)
       columns.forEach((c, i) => { if (lit(c.row.page)) svg += `<rect class="pc-lit" x="${xOf(i)}" y="${top - 9}" width="${Math.max(pitch, 2)}" height="5"/><rect class="pc-lit" x="${xOf(i)}" y="${bottom + 12}" width="${Math.max(pitch, 2)}" height="3"/>`; });
@@ -429,10 +561,11 @@
           start = i;
         }
       }
-      axisLabels(columns, facets, ordering, xOf).forEach(t => { const x = xOf(t.c); svg += `<line class="pc-tick" x1="${x}" x2="${x}" y1="${bottom + 26}" y2="${bottom + 31}"/><text class="pc-xtick" x="${x}" y="${bottom + 41}" text-anchor="start">${esc(t.label)}</text>`; });
-      svg += `<text class="pc-ytick" x="${x0}" y="${H - 4}">Bar height: ${measureName}${compare ? `; ${esc(above)} above the axis, ${esc(below)} below` : ''} · ${ordering === 'bifolium' ? 'bifolia together, in order of their first page' : unit === 'quire' ? 'quire order' : 'page order'} →</text>`;
+      axisLabels(columns, facets, ordering, xOf, W - right).forEach(t => { const x = xOf(t.c); svg += `<line class="pc-tick" x1="${x}" x2="${x}" y1="${bottom + 26}" y2="${bottom + 31}"/><text class="pc-xtick" x="${x}" y="${bottom + 41}" text-anchor="start">${esc(t.label)}</text>`; });
+      svg += `<text class="pc-ytick pc-caption" x="${x0}" y="${H - 4}">Bar height: ${measureName}${compare ? `; ${esc(above)} above the axis, ${esc(below)} below` : ''} · band: each ${U.one}'s words by group · ${ordering === 'bifolium' ? 'bifolia together, in order of their first page' : unit === 'quire' ? 'quire order' : unit === 'bifolium' ? 'bifolia in order of their first page' : 'page order'} →</text>`;
       columns.forEach((c, i) => { svg += `<rect class="pc-hit" data-i="${i}" x="${xOf(i)}" y="${top}" width="${pitch}" height="${bottom - top + 12}"/>`; });
       plot.innerHTML = svg + '</svg>';
+      wrapCaption(plot.querySelector('.pc-caption'), W - x0 - right, H);
       const hover = plot.querySelector('.pc-hover');
       const show = i => { const x = i == null ? -10 : xOf(i) + pitch / 2; hover.setAttribute('x1', x); hover.setAttribute('x2', x); say(i); };
       plot.querySelectorAll('.pc-hit').forEach(h => {
@@ -459,6 +592,7 @@
       const rangeOf = b => b.overflow ? `above ${edge(b.lo)} (the top values)` : b.exact ? (b.lo === 0 ? 'without a match' : `with ${num(b.lo)} ${b.lo === 1 ? 'match' : 'matches'}`)
         : measure === 'count' ? `with ${num(b.lo + 1)}–${num(b.hi)} matches` : `at ${edge(b.lo)}–${edge(b.hi)}`;
       let svg = `<svg class="pc-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`Histograms, one per ${MODE_NAMES[group.mode] || group.mode} group: how many ${U.many} have each value of ${measureName}${compare ? `, ${above} above each axis and ${below} below it` : ''}. The table below gives the totals by group.`)}">`;
+      if (group.groups.some(g => g.hatch)) svg += `<defs>${hatchDefs(group.groups, hatchId)}</defs>`;
       const binOf = v => v == null ? -1 : hist.bins.findIndex(b => b.overflow ? v > b.lo + 1e-12 : b.exact ? v === b.lo : v > b.lo + 1e-12 && v <= b.hi + 1e-12);
       hist.series.forEach((s, si) => {
         const px = (si % cols) * (panelW + gapX), py = Math.floor(si / cols) * (panelH + 14), x0 = px + left, w = panelW - left - 6, base = py + head + plotH;
@@ -466,7 +600,7 @@
         // with no-match units hidden, the median shown (and marked) is that of the units drawn
         const med = hist.zeros ? s.median : s.matchedMedian, medC = compare ? (hist.zeros ? s.medianC : s.matchedMedianC) : null;
         const show = v => v == null ? '—' : esc(fmtValue(v)), drawn = hist.zeros ? '' : ' with a match';
-        const title = `<tspan style="${fill(s.colour)}">■</tspan> ${esc(s.label)} · ${num(s.n)} ${s.n === 1 ? U.one : U.many}`;
+        const title = `<tspan style="${svgPaint(s, hatchId)}">■</tspan> ${esc(s.label)} · ${num(s.n)} ${s.n === 1 ? U.one : U.many}`;
         if (compare) svg += `<text class="pc-run" x="${px}" y="${py + 12}">${title}</text><text class="pc-ytick" x="${px}" y="${py + 25}">median ${show(med)} ▲ · ${show(medC)} ▼${drawn}${s.zeros || s.zerosC ? ` · without a match ${num(s.zeros)} ▲ · ${num(s.zerosC)} ▼` : ''}</text>`;
         else svg += `<text class="pc-run" x="${px}" y="${py + 12}" text-anchor="start">${title}${s.zeros ? ` · ${num(s.zeros)} without a match` : ''}${med == null ? '' : ` · median ${show(med)}${drawn}`}</text>`;
         if (!nb || !s.counts.some(Boolean) && !(compare && s.countsC.some(Boolean))) { svg += `<text class="pc-ytick" x="${x0}" y="${py + head + plotH / 2}">No ${U.many} with a match</text>`; return; }
@@ -477,7 +611,7 @@
         const grid = (t, yy) => `<line class="pc-grid" x1="${x0}" x2="${x0 + w}" y1="${yy}" y2="${yy}"/><text class="pc-ytick" x="${x0 - 4}" y="${yy + 3.5}" text-anchor="end">${num(t)}</text>`;
         yt.forEach(t => { svg += grid(t, y(t)); });
         if (compare) yt.slice(1).forEach(t => { svg += grid(t, yC(t)); });
-        const barAt = (b, c, cmp) => `<rect class="pc-bar${hist.bins[b].overflow ? ' pc-over' : ''}${cmp ? ' pc-cmp' : ''}" data-k="${esc(s.key)}" x="${(xb(b) + 0.5).toFixed(2)}" y="${(cmp ? base : y(c)).toFixed(2)}" width="${Math.max(1, bw - 1).toFixed(2)}" height="${(cmp ? yC(c) - base : base - y(c)).toFixed(2)}" style="${fill(s.colour)}"/>`;
+        const barAt = (b, c, cmp) => `<rect class="pc-bar${hist.bins[b].overflow ? ' pc-over' : ''}${cmp ? ' pc-cmp' : ''}" data-k="${esc(s.key)}" x="${(xb(b) + 0.5).toFixed(2)}" y="${(cmp ? base : y(c)).toFixed(2)}" width="${Math.max(1, bw - 1).toFixed(2)}" height="${(cmp ? yC(c) - base : base - y(c)).toFixed(2)}" style="${svgPaint(s, hatchId)}"/>`;
         s.counts.forEach((c, b) => {
           if (c) svg += barAt(b, c, false);
           if (compare && s.countsC[b]) svg += barAt(b, s.countsC[b], true);
@@ -507,6 +641,7 @@
       const split = parts.length > 1 ? ` · ${parts.map(x => `${esc(groupName(x.k))} ${num(x.m)} of ${num(x.t)}`).join(' · ')}` : '';
       const part = t !== r.totalTokens ? `${esc(facets[c.facet].label || '')} part: ` : '', whole = t !== r.totalTokens ? `; whole ${U.one}: ${num(r.totalMatches)} in ${num(r.totalTokens)}` : '';
       const meta = r.kind === 'quire' ? [`quire ${p.quire}`, `${p.pages[0].folio}–${p.last}`, `${p.pages.length} pages`]
+        : r.kind === 'bifolium' ? [`quire ${p.quire}`, p.pages.map(x => x.folio).join(', '), `${p.pages.length} ${p.pages.length === 1 ? 'page' : 'pages'}`]
         : [(names.section || {})[p.section] || p.section, p.regime ? ((names.regime || {})[p.regime] || p.regime) + ' regime' : 'no regime',
           p.rz ? 'RZ ' + p.rz : '', p.lang ? 'Currier ' + p.lang : 'no Currier language', hands.length ? 'hand ' + hands.join(', ') : '', 'sheet ' + p.sheet].filter(Boolean);
       const rate = x => measure === 'per10k' ? per10kText(t ? 1e4 * x / t : 0) + ' per 10k words' : pctText(t ? x / t : 0);
@@ -520,17 +655,12 @@
     }
 
     function table() {
-      const main = s => measure === 'percent' ? s.rate || 0 : measure === 'per10k' ? s.per10k || 0 : measure === 'perline' ? s.perLine || 0 : s.matches;
-      const max = Math.max(1e-12, ...stats.rows.map(main), ...(statsC ? statsC.rows.map(main) : []));
-      const swatch = s => `<i class="pc-sw" style="background:var(${s.colour})"></i>`;
+      const max = Math.max(1e-12, ...stats.rows.map(MEASURE_VALUE[measure]), ...(statsC ? statsC.rows.map(MEASURE_VALUE[measure]) : []));
       const best = s => !s.best ? '—' : `${esc(s.best.unit)} <span class="muted">${fmtValue(s.best.value)}</span>`;
-      const bar = (s, cmp) => `<span class="pc-ib${cmp ? ' pc-cmp' : ''}"><i style="width:${(100 * main(s) / max).toFixed(1)}%;background:var(${s.colour})"></i></span>`;
-      const shown = {count: s => num(s.matches), percent: s => pctText(s.rate), per10k: s => per10kText(s.per10k), perline: s => lineText(s.perLine)};
-      // Every number in a measure column sits in a box as wide as the column's longest value, so the bars before them
-      // start at one margin however many digits a row has.
+      const bar = (s, cmp) => inlineBar(measure, s, max, cmp);
       const everyRow = [...stats.rows, stats.total, ...(statsC ? [...statsC.rows, statsC.total] : [])];
-      const width = Object.fromEntries(Object.keys(shown).map(m => [m, 1 + Math.max(...everyRow.map(s => shown[m](s).length))]));
-      const value = (m, s) => `<span class="pc-num" style="min-width:${width[m]}ch">${shown[m](s)}</span>`;
+      const width = Object.fromEntries(Object.keys(MEASURE_TEXT).map(m => [m, valueWidth(m, everyRow)]));
+      const value = (m, s) => valueBox(m, s, width[m]);
       // the two patterns' correlation over the group's units (Spearman's rho and n in the tooltip)
       const fixed = (x, d) => (x < 0 ? '−' : '') + Math.abs(x).toFixed(d);
       const corrCell = s => {
@@ -540,8 +670,8 @@
       };
       // each measure's column; with a comparison, the measure shown gets a second column for it, on the same bar
       // scale, and then the correlation column
-      const cell = (m, s, sC) => `<td class="pc-m">${measure === m && s.colour ? bar(s) : ''}${value(m, s)}</td>`
-        + (sC && measure === m ? `<td class="pc-m">${sC.colour ? bar(sC, true) : ''}${value(m, sC)}</td>${corrCell(s)}` : '');
+      const cell = (m, s, sC) => `<td class="pc-m">${measure === m ? bar(s) : ''}${value(m, s)}</td>`
+        + (sC && measure === m ? `<td class="pc-m">${bar(sC, true)}${value(m, sC)}</td>${corrCell(s)}` : '');
       const row = (s, sC, cls = '') => `<tr class="${cls}" data-g="${esc(s.key)}"><td class="pc-name">${s.colour ? swatch(s) : ''}${esc(s.label)}</td>
         <td>${num(s.pagesWith)} <span class="muted">of ${num(s.pages)}</span></td>
         ${cell('count', s, sC)}<td>${s.share == null ? '—' : pctText(s.share, 1)}</td><td>${num(s.tokens)}</td><td>${num(s.lines)}</td>
@@ -552,13 +682,13 @@
           + `<th title="Pearson's r of ▲ and ▼, ${U.one} by ${U.one}, in the measure shown; hover a value for Spearman's ρ">Correlation</th>`
         : `<th title="${title}">${label}</th>`;
       const overlap = group.both && rows.some(r => r.tokens.both);
-      const Unit = U.one[0].toUpperCase() + U.one.slice(1);
-      // a quire whose pages fall in different groups counts in each of them, with only its own pages there
-      const split = unit === 'quire' ? rows.filter(r => group.groups.filter(g => g.members.some(k => r.tokens[k])).length > 1).map(r => unitName(r)) : [];
-      return `<div class="wb-scroll pc-tablewrap"><table class="wb-table pc-table"><thead><tr><th>Group</th><th title="${Unit}s with at least one match, of the group's ${U.many}">${Unit}s with matches</th>${head('count', 'Matches', 'Matches')}<th title="This group's share of all matches in the manuscript">Share</th><th title="Readable words in the selected loci (unreadable tokens excluded)">Words</th><th title="Text lines with at least one readable word">Lines</th>${head('percent', 'Per word', 'Matches ÷ words, pooled over the group')}${head('per10k', 'Per 10k words', 'Matches per 10,000 words, pooled over the group')}${head('perline', 'Per line', 'Matches ÷ lines, pooled over the group')}<th title="Median of the group's ${U.one} rates${measure === 'perline' ? ' per line' : measure === 'per10k' ? ' per 10,000 words' : ' per word'}">Median ${U.one}</th><th title="${Unit} with the highest value of the chosen measure">Top ${U.one}</th></tr></thead>
+      const Unit = U.one[0].toUpperCase() + U.one.slice(1), Units = U.many[0].toUpperCase() + U.many.slice(1);
+      // a sheet or quire whose pages fall in different groups counts in each of them, with only its own pages there
+      const split = unit === 'quire' || unit === 'bifolium' ? rows.filter(r => group.groups.filter(g => g.members.some(k => r.tokens[k])).length > 1).map(r => unitName(r)) : [];
+      return `<div class="wb-scroll pc-tablewrap"><table class="wb-table pc-table"><thead><tr><th>Group</th><th title="${Units} with at least one match, of the group's ${U.many}">${Units} with matches</th>${head('count', 'Matches', 'Matches')}<th title="This group's share of all matches in the manuscript">Share</th><th title="Readable words in the selected loci (unreadable tokens excluded)">Words</th><th title="Text lines with at least one readable word">Lines</th>${head('percent', 'Per word', 'Matches ÷ words, pooled over the group')}${head('per10k', 'Per 10k words', 'Matches per 10,000 words, pooled over the group')}${head('perline', 'Per line', 'Matches ÷ lines, pooled over the group')}<th title="Median of the group's ${U.one} rates${measure === 'perline' ? ' per line' : measure === 'per10k' ? ' per 10,000 words' : ' per word'}">Median ${U.one}</th><th title="${Unit} with the highest value of the chosen measure">Top ${U.one}</th></tr></thead>
         <tbody>${stats.rows.map((s, i) => row(s, statsC && statsC.rows[i])).join('')}${row({...stats.total, colour: null}, statsC && {...statsC.total, colour: null}, 'pc-total')}</tbody></table></div>
         ${compare ? `<p class="wb-small">▲ ${esc(above)} · ▼ ${esc(below)}. Correlation pairs the two ${U.one} by ${U.one} within each group; the other columns count ▲ only.</p>` : ''}
-        ${split.length ? `<p class="wb-small">Split between groups: ${esc(split.join(', '))}. Each group counts only its own pages of these quires.</p>` : ''}
+        ${split.length ? `<p class="wb-small">Split between groups: ${esc(split.join(', '))}. Each group counts only the pages that fall within it.</p>` : ''}
         ${overlap ? `<p class="wb-small">Striped ${U.many} belong to both populations and count in both rows.</p>` : ''}`;
     }
 
@@ -571,8 +701,8 @@
     }
   }
 
-  const api = {SECTION_COLOURS, RZ_COLOURS, RZ_LABELS, CURRIER_COLOURS, HAND_COLOURS, OTHER, rzClass, category, grouping, unitModel, pageModel, unitName,
-    rowOrder, pageOrder, layoutColumns, axisLabels, statistics, histograms, niceWidth, measureOf, niceTicks, pearson, spearman, correlations, mount};
+  const api = {GOLF_NUMBERS, GOLF_SUBDIVISIONS, paint, SECTION_COLOURS, RZ_COLOURS, RZ_LABELS, CURRIER_COLOURS, HAND_COLOURS, OTHER, rzClass, category, grouping, unitModel, pageModel, unitName,
+    rowOrder, pageOrder, layoutColumns, axisLabels, statistics, histograms, niceWidth, measureOf, niceTicks, pearson, spearman, correlations, seriesTable, cutLabel, hideGroups, mount};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.EchoPageChart = api;
 })(typeof window !== 'undefined' ? window : globalThis);

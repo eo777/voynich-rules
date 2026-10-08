@@ -5,6 +5,10 @@
  */
 (function(root) {
   'use strict';
+  // An edge lists alternative route codes. 'C1.2' is step 2 of C1; 'ed+GEDY_AR' is a composition that needs both ed
+  // and GEDY_AR (the catalog's routes). A code is enabled when every rule it names is on.
+  const ruleParts = code => code.split('+').map(c => c.split('.')[0]);
+  const ruleLive = (code, enabled) => ruleParts(code).every(r => enabled.has(r));
   function vocabulary(data) {
     const words = new Map(data.nodes.map(n => [n.id, {...n,rate:Object.fromEntries(data.sections.map(s=>[s.key,(n.count[s.key]||0)*10000/s.N]))}]));
     for (const [id, counts] of Object.entries(data.lex)) words.set(id, {
@@ -14,7 +18,7 @@
     return words;
   }
   function enabledGraph(data, enabled) {
-    const edges = data.edges.map(e => ({...e, rules:e.rules.filter(r=>enabled.has(r.split('.')[0]))})).filter(e=>e.rules.length);
+    const edges = data.edges.map(e => ({...e, rules:e.rules.filter(r=>ruleLive(r,enabled))})).filter(e=>e.rules.length);
     const pairs = edges.map(e=>e.forwardOnly?[e.s,e.t,true]:[e.s,e.t]);
     for (const c of data.chains) if(enabled.has(c.rule)) pairs.push([c.path[0],c.path[2]]);
     const adj = new Map();
@@ -92,6 +96,6 @@
     return {source,target,retained,excess,demand,matched,unplaced:Math.max(0,excess-matched),unfilled:Math.max(0,demand-matched),
       perWord,routes:flow.routes,ratio:source>0?target/source:null,relativeGap:Math.max(source,target)>0?Math.abs(source-target)/Math.max(source,target):0};
   }
-  const api={vocabulary,enabledGraph,closure,destinations,visible,maximumFlow,accounting};
+  const api={ruleParts,ruleLive,vocabulary,enabledGraph,closure,destinations,visible,maximumFlow,accounting};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.EchoGraphMetrics=api;
 })(typeof window!=='undefined'?window:globalThis);
