@@ -17,14 +17,16 @@
   const badge=key=>`<span class="eo-tag eo-${key} ev-help" tabindex="0" ${help(key)}>${tags[key]}</span>`;
   const coverageHelp='K/T covered is the percentage of this later section’s ordinary K/T occurrences in groups with at least 10 occurrences in both early A and this section. It measures included observations, not rule accuracy. Changing the grain changes which groups meet that minimum.';
   const cache=new WeakMap();
+  const measures={adjusted:{name:'Adjusted',explanation:'Adjusted rates remove the section-wide change in K/T frequency while preserving differences between families.',unit:'growth-adjusted per 10,000'},share:{name:'Percentages',explanation:'Percentages show K and T as shares of each family’s total.',unit:'share of family'},rate:{name:'Observed',explanation:'Observed rates show occurrences per 10,000 section words.',unit:'per 10,000 words'}};
 
-  function model(study,mode='pools'){
+  function model(study,mode='pools',measure='adjusted'){
     mode=grains[mode]?mode:'pools';
+    measure=measures[measure]?measure:'adjusted';const key=mode+':'+measure;
     if(!cache.has(study))cache.set(study,{tree:T.build(study),stock:O.inventory(study),models:new Map()});
     const context=cache.get(study);
-    if(context.models.has(mode))return context.models.get(mode);
+    if(context.models.has(key))return context.models.get(key);
     const {tree,stock}=context,minimum=10,tolerance=O.DEFAULTS.tolerance;
-    const options=target=>({target,minimum,measure:'rate',tolerance});
+    const options=target=>({target,minimum,measure,tolerance});
     const metric=(node,target)=>O.analyze(study,node,options(target),stock);
     const comparisons=study.sections.filter(section=>section.key!==study.source).map(section=>{
       const all=Object.values(tree.nodes).filter(node=>node.level===grains[mode].level).map(node=>metric(node,section.key)),eligible=all.filter(row=>row.eligible);
@@ -37,13 +39,13 @@
     const matrix=['okal','kal'].map(id=>({node:pool(id),targets:['HA_late','PharmaA','HB_all']})).filter(row=>row.node);
     const pair=Object.values(tree.nodes).find(node=>node.level==='pair'&&node.words.includes('ykaiin')&&node.words.includes('ytaiin'));
     const examples=[pair,pool('qokal')].filter(Boolean).map(node=>({node,target:'HB_all'}));
-    const result={tree,stock,minimum,tolerance,metric,comparisons,matrix,examples,mode,grain:grains[mode]};
-    context.models.set(mode,result);return result;
+    const result={tree,stock,minimum,tolerance,metric,comparisons,matrix,examples,mode,grain:grains[mode],measure};
+    context.models.set(key,result);return result;
   }
 
   function patchFor(m,target,node){
     return {panel:'patterns',patternMode:node?(node.level==='pair'?'pairs':'pools'):m.mode,patternTarget:target,
-      patternMin:m.minimum,patternTolerance:m.tolerance,patternSwapTolerance:O.DEFAULTS.swapTolerance,patternSparseMin:5,patternMeasure:'rate',patternScale:'family',
+      patternMin:m.minimum,patternTolerance:m.tolerance,patternSwapTolerance:O.DEFAULTS.swapTolerance,patternSparseMin:5,patternMeasure:m.measure,patternScale:'family',
       patternChart:'map',patternOutcome:'all',patternGrowth:'all',patternSparse:false,patternSort:'inversion-volume',
       patternPage:0,patternBranches:[],patternExpanded:'',patternSelected:node?.id||'',patternStack:[]};
   }
@@ -54,21 +56,18 @@
     if(node.poolId==='qokal')return 'qok* / qot*';
     return node.label;
   }
-  function metadata(node){return node.level==='pair'?'Exact pair':`Pool ${node.poolId} · ${node.words.length} spellings`;}
   function card(study,m,node,target,withFamily){
     const row=m.metric(node,target),patch=patchFor(m,target,node),label=title(node);
     return `<article class="eg-chart">
       <div class="eg-chart-head"><strong>${esc(label)}</strong>${badge(row.outcome)}</div>
-      <span class="eg-chart-meta">${esc(metadata(node))}</span>
       <button class="eg-plot" ${attributes(patch)} aria-label="Explore ${esc(label)} from Early A to ${esc(names[target])}">
-      ${S.svg(row.display.source,row.display.target,{sourceLabel:'Early A',targetLabel:names[target],unitLabel:'per 10,000 words',seriesLabels:{k:node.kLabel,t:node.tLabel}})}
-      <span class="eg-chart-foot"><span>${integer(row.source.total)} → ${integer(row.target.total)} observations</span><span>Swap error ${n(row.quality.swapError*100)}%</span><span>Explore ↗</span></span>
+      ${S.svg(row.display.source,row.display.target,{sourceLabel:'Early A',targetLabel:names[target],unitLabel:measures[m.measure].unit,seriesLabels:{k:node.kLabel,t:node.tLabel},...(m.measure==='share'?{ceiling:100,valueSuffix:'%'}:{})})}
       </button></article>`;
   }
   function inventory(study,m){
     const source=m.stock.bySection[study.source];
     return `<section class="eg-block" aria-labelledby="eg-inventory"><div class="eg-section-head"><h3 id="eg-inventory">Section comparison</h3><label>Outcome grain<select data-guide-grain>${Object.entries(grains).map(([key,g])=>`<option value="${key}" ${key===m.mode?'selected':''}>${g.name}</option>`).join('')}</select></label></div>
-      <p class="eg-caption">Section totals stay fixed. Outcome counts use ${m.grain.noun} with ${m.minimum} observations in each section.</p>
+      <p class="eg-caption">Section totals stay fixed. Outcome counts use the selected chart measure and ${m.grain.noun} with ${m.minimum} observations in each section.</p>
       <div class="eg-table-scroll"><table class="eg-census"><thead><tr><th rowspan="2">Section</th><th rowspan="2">K count</th><th rowspan="2">T count</th><th rowspan="2">K + T<br>per 10k</th><th rowspan="2">Change</th><th colspan="5">Eligible ${m.grain.noun}</th><th rowspan="2"><span class="ev-help" tabindex="0" data-evidence-help="${esc(coverageHelp)}">K/T covered ⓘ</span></th></tr><tr>${outcomes.map(key=>`<th class="eo-${key}"><span class="ev-help" tabindex="0" ${help(key)}>${tags[key]}</span></th>`).join('')}</tr></thead><tbody>
       ${study.sections.map(section=>{
         const row=m.stock.bySection[section.key],comparison=m.comparisons.find(item=>item.key===section.key),sourceRow=section.key===study.source;
@@ -82,11 +81,12 @@
     <p>Every rate uses the full readable paragraph-word count of its section. Only words with exactly one ordinary k or t enter this inventory. P/F, bench gallows, multiple gallows and unresolved glyphs are excluded. Herbal B contains herbal pages only. Late A + Pharma repeats the two component samples and is not an independent comparison.</p>
     <table class="eg-denominators"><thead><tr><th>Section</th><th>Section words</th><th>Ordinary K/T words</th></tr></thead><tbody>${study.sections.map(section=>`<tr><th>${names[section.key]}</th><td>${integer(section.N)}</td><td>${integer(m.stock.bySection[section.key].total)}</td></tr>`).join('')}</tbody></table>
     <p>The six main charts compare the large o-prefixed pool with the large bare pool in three distinct later sections. The final examples add the exact ykaiin/ytaiin pair and the qo-prefixed pool. They are selected contrasts, not an exhaustive or random sample. The table counts every eligible group at the selected grain, including contrary outcomes. Prefixes, ending groups and exact pairs subdivide each rule pool. Finer cuts can split overlapping donors and fall below the count minimum. They are descriptive checks, not independent confirmations or a replacement for pooled rule accounting.</p><p>The asterisk represents zero or more characters. Pool labels abbreviate their listed members, not every matching manuscript word. Candidate rules define membership, and the explorer lists the actual spellings and rules.</p>
-    <p>Charts show observed rates on their own zero-based axes. The guide uses the default 15% maximum pooled swap error, at least ten observations per section, a clear early imbalance and a better fit than retention. Inversion+ is descriptive, not statistical confidence. Select a chart to inspect its counts, subgroups and connecting rules. These observations do not establish word identity, chronology or individual transformations.</p>
+    <p>The chart measure applies to all eight examples and the outcome counts. Adjusted divides later rates by the section’s total ordinary K/T rate relative to early A. Percentages uses each family’s K/T total and a shared 0–100% axis. Observed uses rates per 10,000 section words. Raw counts and section totals never change. Inversion+ always uses the default 15% maximum pooled adjusted error, at least ten observations per section, a clear early imbalance and a better fit than retention. It is descriptive, not statistical confidence. Select a chart to inspect its counts, subgroups and connecting rules. These observations do not establish word identity, chronology or individual transformations.</p>
   </details>`;}
   function html(study,state){
-    const m=model(study,state?.guideGrain),hb=m.comparisons.find(row=>row.key==='HB_all');
+    const m=model(study,state?.guideGrain,state?.guideMeasure),hb=m.comparisons.find(row=>row.key==='HB_all');
     return `<section class="eg-guide ef-story eo-explorer"><div class="eg-result" aria-label="Early A to Herbal B summary"><strong>Early A → Herbal B</strong><span><b>${signed((m.stock.factors.HB_all-1)*100)}%</b> K/T frequency</span><span><b>${hb.counts.inversion+hb.counts.inversionPlus} / ${hb.eligible.length}</b> Reversed ${m.grain.noun}</span><span class="eo-inversionPlus ev-help" tabindex="0" ${help('inversionPlus')}><b>${hb.counts.inversionPlus} / ${hb.eligible.length}</b> Inversion+</span></div>${inventory(study,m)}
+      <section class="eg-block eg-measure" aria-label="Guide chart measure"><label>Chart measure<select data-guide-measure>${Object.entries(measures).map(([key,value])=>`<option value="${key}" ${key===m.measure?'selected':''}>${value.name}</option>`).join('')}</select></label><p>${measures[m.measure].explanation}</p></section>
       <section class="eg-block" aria-labelledby="eg-comparisons"><h3 id="eg-comparisons">Section contrasts</h3>
         <div class="eg-outcome-key"><span><code>*</code> matches zero or more characters.</span><span>Pool labels abbreviate the listed members.</span></div>
         ${m.matrix.map(({node,targets})=>`<div class="eg-family-row"><div class="eg-chart-grid">${targets.map(target=>card(study,m,node,target,false)).join('')}</div></div>`).join('')}
@@ -97,6 +97,7 @@
   function bind(host,study,state,onExplore,onChange=()=>{}){
     host.querySelectorAll('[data-guide-explore]').forEach(element=>element.addEventListener('click',()=>onExplore(JSON.parse(element.dataset.guideExplore))));
     host.querySelector('[data-guide-grain]')?.addEventListener('change',event=>{state.guideGrain=event.target.value;onChange();});
+    host.querySelector('[data-guide-measure]')?.addEventListener('change',event=>{state.guideMeasure=event.target.value;onChange();});
   }
   const api={html,bind,model};
   if(nodeModule)module.exports=api;else root.EchoEvidenceGuide=api;

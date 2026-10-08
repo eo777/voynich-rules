@@ -8,6 +8,7 @@
   const panelScroll={guide:0,patterns:0,accounting:0};
   let guideVisited=false,pendingPanelScroll=null,guideDisclosures=new Set(),helpTarget=null,helpPopup=null;
   state.guideGrain='pools';
+  state.guideMeasure='adjusted';
   Object.assign(state,{patternTolerance:1.25,patternSwapTolerance:.15,patternSparseMin:5,patternSort:'inversion-volume',patternOutcome:'all',patternGrowth:'all',patternChart:'charts',patternSparse:false,patternBranches:[],patternSelected:'',patternStack:[]});
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const n=v=>Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -57,6 +58,7 @@
     const R=root.EchoViewState.read;
     if(host&&['guide','patterns','accounting'].includes(p.panel)&&p.panel!==state.panel){rememberPanel();pendingPanelScroll=panelScroll[p.panel]||0;}
     state.guideGrain=R.oneOf(p.guideGrain,['pools','prefixes','endings','pairs'])||state.guideGrain;
+    state.guideMeasure=R.oneOf(p.guideMeasure,['adjusted','share','rate'])||state.guideMeasure;
     for(const [key,values] of Object.entries({panel:['guide','patterns','accounting'],patternMode:['pools','prefixes','endings','pairs'],patternMeasure:['both','rate','adjusted','share'],patternScale:['family','global'],patternOutcome:['all','flat','converge','diverge','inversion','inversionPlus'],patternGrowth:['all','above','below'],patternChart:['charts','map'],origin:['patterns','example','manual']}))state[key]=R.oneOf(p[key],values)||state[key];
     state.patternMin=R.oneOf(Number(p.patternMin),[0,1,5,10,20])??state.patternMin;
     state.patternTolerance=R.oneOf(Number(p.patternTolerance),[1.1,1.2,1.25,1.3,1.5])??state.patternTolerance;

@@ -36,9 +36,9 @@
 .eg-chart-head .eo-tag{font-size:10px;padding:2px 6px}
 .eg-chart-meta{display:block;margin-top:3px}
 .eg-chart .ep-slope-chart{width:100%;height:auto;max-width:440px;display:block;margin:0 auto}
+.eg-chart .ep-slope-heading{font-size:16px;font-weight:600}
 .eg-chart .ep-slope-value{font-size:16px}
 .eg-chart-foot{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--ink2,#59676c)}
-.eg-chart-foot>span:last-child{color:var(--accent,#407a88);font-weight:550}
 .eg-method{border:1px solid var(--eg-line);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--ink2,#59676c)}
 .eg-method summary{cursor:pointer;color:var(--ink,#243438);font-weight:600}
 .eg-method p{max-width:1000px;line-height:1.5;margin:12px 0}
@@ -58,3 +58,7 @@
 .eg-plot{display:block;width:100%;border:0;background:none;color:inherit;padding:0;font:inherit;text-align:left;cursor:pointer}
 .eg-plot:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .eg-chart .ep-slope-value{font-size:14px}
+.eg-measure{display:flex;align-items:center;flex-wrap:wrap;gap:10px 20px}
+.eg-measure label{display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap}
+.eg-measure select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--eg-line);border-radius:5px;padding:5px 8px}
+.eg-measure p{margin:0;font-size:13px;font-style:italic;color:var(--ink2)}
