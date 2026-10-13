@@ -35,7 +35,7 @@
     all: 'every spelling of the paragraph text, all nine groups at once (the Word box is empty)',
     pattern: 'the spellings matching the pattern, in the Words & contexts syntax; each spelling is matched on its own, so terms about neighbours or line position do not apply'};
   const NOTATION = 'In the Rules column, a comma lists separate rules and + joins rules that are needed together.';
-  const state = {q: 'chol', scope: 'family', unit: 'spelling', axis: 'groupsPos', order: 'alternate', middle: 'off', schedule: true, measure: 'per10k', bands: 12, mergeQ: false, flows: true, skips: true, lineage: 'kin', ruleFocus: true, keptSince: false, sel: [], step: null};
+  const state = {q: 'chol', scope: 'family', unit: 'spelling', axis: 'groupsPos', order: 'alternate', middle: 'steps', schedule: true, measure: 'per10k', bands: 12, mergeQ: false, flows: true, skips: false, lineage: 'off', ruleFocus: true, keptSince: false, sel: [], step: null};
   const isSel = label => state.sel.includes(label), anySel = () => state.sel.length > 0;
   // a plain click selects one ribbon (or releases the only selected one); a shift-click adds it to the selection or removes it
   const toggleSel = (label, add) => { if (add) state.sel = isSel(label) ? state.sel.filter(l => l !== label) : state.sel.concat([label]); else state.sel = state.sel.length === 1 && isSel(label) ? [] : [label]; };

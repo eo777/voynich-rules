@@ -1,4 +1,4 @@
-window.ECHO_RELEASE = {"version":"2026.10.13","build":"f77c5467c35a","date":"2026-10-13","docs":null};
+window.ECHO_RELEASE = {"version":"2026.10.13.2","build":"cb96c59f5c11","date":"2026-10-13","docs":null};
 // Release stamp and update check, added to the published copy by publish/publish.py (the workspace app has neither).
 // GitHub Pages lets a browser reuse a page for up to ten minutes. Every file the page loads carries a hash of its
 // contents (?v=...), so a page always gets the files it was released with; to notice a newer release, this script
