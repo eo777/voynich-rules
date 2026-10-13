@@ -19,7 +19,59 @@
   // two words before, and so on along the line, as the Previous / Next word boxes do (no crossing of a line end or an
   // unreadable gap). Such terms need the text around a match: occurrencePattern() evaluates them, while pattern(),
   // which matches one word, refuses them.
+  // After the offset, a term may name where its word stands. Word position: [li] line initial (the first token of its
+  // line, as Word position: Line start) and [lf] line final. Line class, as the Line class filter (the same tests):
+  // [pi] paragraph initial, [pgi] page initial, [lpi] later paragraph initial, [npi] not paragraph initial. ! inside the
+  // brackets negates the place alone: [!pgi]p* is p* AND NOT [pgi]*, while NOT before a term (![pgi]p*) negates the
+  // whole term, spelling included. Qualifiers stack ([pi][!pgi]p* is [lpi]p*) and are plain conditions. No spelling
+  // contains a bracket, so a bracket only ever opens a qualifier. pattern() refuses qualifiers too.
   const OPERATORS = {'&': 'AND', '|': 'OR', '!': 'NOT', AND: 'AND', OR: 'OR', NOT: 'NOT'};
+  // Page-initial lines: the first prose line of each page (lowest locus), which in this transliteration always starts a
+  // paragraph. Marked on the line objects (`pageFirst`) from the whole text, so any subset of it keeps the marks.
+  function markPageInitial(lines) {
+    const first = new Map();
+    for (const l of lines) if ((l.category || 'para') === 'para') { const f = first.get(l.folio); if (!f || parseFloat(l.locus) < parseFloat(f.locus)) first.set(l.folio, l); }
+    for (const l of lines) l.pageFirst = first.get(l.folio) === l;
+    return lines;
+  }
+  // Line classes: paragraph initial (first), page initial (page), paragraph initial below the page's first line
+  // (later), and every other line (body)
+  const LINE_CLASSES = {first: l => !!l.first, page: l => l.pageFirst, later: l => !!l.first && !l.pageFirst, body: l => !l.first};
+  function lineClassTest(name) {
+    if (!name || name === 'any') return () => true;
+    const test = LINE_CLASSES[name];
+    if (!test) throw new Error('Unknown line class: ' + name);
+    return line => {
+      if ((name === 'page' || name === 'later') && line.pageFirst === undefined) throw new Error('Page-initial lines are not marked; call markPageInitial on the whole text.');
+      return test(line);
+    };
+  }
+  const QUALIFIERS = {
+    li: {name: 'line initial', not: 'not line initial', test: (line, i) => i === 0},
+    lf: {name: 'line final', not: 'not line final', test: (line, i) => i === line.words.length - 1},
+    pi: {name: 'paragraph-initial line', not: 'not a paragraph-initial line', test: lineClassTest('first')},
+    pgi: {name: 'page-initial line', not: 'not a page-initial line', test: lineClassTest('page')},
+    lpi: {name: 'later paragraph-initial line', not: 'not a later paragraph-initial line', test: lineClassTest('later')},
+    npi: {name: 'line that is not paragraph initial', not: 'paragraph-initial line', test: lineClassTest('body')},
+  };
+  const QUALIFIER_LIST = Object.keys(QUALIFIERS).map(q => `[${q}]`).join(', ');
+  // A qualifier as written between its brackets: a code ('pgi'), or ! and a code for its negation ('!pgi')
+  const qualifierName = q => q.startsWith('!') ? QUALIFIERS[q.slice(1)].not : QUALIFIERS[q].name;
+  const qualifierTest = q => { if (!q.startsWith('!')) return QUALIFIERS[q].test; const test = QUALIFIERS[q.slice(1)].test; return (line, i) => !test(line, i); };
+  // A term's leading qualifiers and the spelling pattern after them
+  function qualified(rest, text) {
+    const quals = [];
+    for (let m; (m = /^\[([^\]]*)\]/.exec(rest)); rest = rest.slice(m[0].length)) {
+      if (!QUALIFIERS[m[1].replace(/^!/, '')]) throw new Error(`"[${m[1]}]" is not a qualifier; use ${QUALIFIER_LIST}, or one with ! inside to negate it, as in [!pgi].`);
+      if (!quals.includes(m[1])) quals.push(m[1]);
+    }
+    if (rest.startsWith('[')) throw new Error(`"${text}": close the qualifier with ], as in [li]p*.`);
+    const offset = /^[+-]?\d+:/.exec(rest);
+    if (offset && quals.length) throw new Error(`Write the offset first: ${offset[0]}${quals.map(q => `[${q}]`).join('')}${rest.slice(offset[0].length)}.`);
+    if (/[[\]]/.test(rest)) throw new Error(`"${text}": a qualifier such as [li] goes at the start of a term, before the spelling.`);
+    if (quals.length && !rest) throw new Error(`"${text}" needs a spelling after the qualifier, e.g. ${text}*.`);
+    return {glob: rest, quals};
+  }
   function parsePattern(query = '') {
     query = String(query ?? '');
     if (query.length > 160) throw new Error('Keep patterns under 160 characters.');
@@ -28,12 +80,15 @@
       const ch = query[i];
       if (/\s/.test(ch)) { i++; continue; }
       if ('()&|!'.includes(ch)) { tokens.push(ch === '(' || ch === ')' ? {t: ch} : {t: 'op', v: OPERATORS[ch]}); i++; continue; }
-      let j = i; while (j < query.length && !/[\s()&|!]/.test(query[j])) j++;
+      // a term runs to a space or an operator symbol, except that inside a qualifier's brackets ! negates the code
+      let j = i, inside = false;
+      for (; j < query.length; j++) { const c = query[j]; if (c === '[') inside = true; else if (c === ']') inside = false; else if (/\s/.test(c) || (!inside && /[()&|!]/.test(c))) break; }
       const text = query.slice(i, j); i = j;
       if (/^(AND|OR|NOT)$/.test(text)) { tokens.push({t: 'op', v: text}); continue; }
       const at = /^([+-]?\d+):(.*)$/.exec(text);
       if (at && !at[2]) throw new Error(`"${text}" needs a pattern after the colon.`);
-      tokens.push({t: 'term', v: at ? at[2] : text, offset: at ? Number(at[1]) || 0 : 0, text});
+      const {glob: v, quals} = qualified(at ? at[2] : text, text);
+      tokens.push({t: 'term', v, quals, offset: at ? Number(at[1]) || 0 : 0, text});
     }
     if (!tokens.length) return null;
     let k = 0;
@@ -42,7 +97,7 @@
     function primary() {
       const tok = peek();
       if (!tok) throw new Error(tokens[k - 1].t === '(' ? 'A parenthesis is not closed.' : `${tokens[k - 1].v} needs a pattern after it.`);
-      if (tok.t === 'term') { k++; return {t: 'term', v: tok.v, offset: tok.offset, text: tok.text}; }
+      if (tok.t === 'term') { k++; return {t: 'term', v: tok.v, quals: tok.quals, offset: tok.offset, text: tok.text}; }
       if (tok.t === '(') {
         k++; if (peek()?.t === ')') throw new Error('The parentheses are empty.');
         const inner = or(); if (peek()?.t !== ')') throw new Error('A parenthesis is not closed.');
@@ -87,35 +142,86 @@
   function pattern(query = '') {
     return compileTree(parsePattern(query), node => {
       if (node.offset) throw new Error(`This box matches one word: write "${node.v}" without "${node.offset}:".`);
+      if (node.quals.length) throw new Error(`This box matches one word: write "${node.v}" without "${node.quals.map(q => `[${q}]`).join('')}".`);
       return word => word != null && glob(node.v, word);
     });
   }
-  // The word `offset` places from an occurrence along its line, in the occurrence's spelling view (q merged or not);
-  // null at a line end or past an unreadable gap.
-  function wordAt(o, offset) {
-    if (!offset) return o.word;
+  // The position of the word `offset` places from an occurrence along its line; -1 at a line end or past an
+  // unreadable gap.
+  function indexAt(o, offset) {
+    if (!offset) return o.index;
     const words = o.line.words, step = offset < 0 ? -1 : 1, target = o.index + offset;
     for (let i = o.index + step; ; i += step) {
-      if (i < 0 || i >= words.length || !words[i]) return null;
-      if (i === target) return o.mergeQ ? core(words[i]) : words[i];
+      if (i < 0 || i >= words.length || !words[i]) return -1;
+      if (i === target) return i;
     }
   }
-  // Matches an occurrence: a term without an offset tests its word, -1:… the word before it, and so on.
-  function occurrencePattern(query = '') {
-    return compileTree(parsePattern(query), node => o => { const word = wordAt(o, node.offset); return word != null && glob(node.v, word); });
+  // That word in the occurrence's spelling view (q merged or not); null where indexAt finds none.
+  function wordAt(o, offset) {
+    if (!offset) return o.word;
+    const i = indexAt(o, offset);
+    return i < 0 ? null : o.mergeQ ? core(o.line.words[i]) : o.line.words[i];
   }
-  // The pattern with its grouping written out: NOT's scope always in parentheses, and a group of one operator
-  // inside the other in parentheses. '' for an empty pattern.
-  function describePattern(query = '') {
-    const flat = (n, t) => n.t === t ? [...flat(n.a, t), ...flat(n.b, t)] : [n];
-    const show = (n, parent) => {
-      if (n.t === 'term') return n.offset ? `${n.offset}:${n.v}` : n.v;
-      if (n.t === 'not') return `NOT (${show(n.a, null)})`;
-      const text = flat(n, n.t).map(c => show(c, n.t)).join(n.t === 'and' ? ' AND ' : ' OR ');
-      return parent ? `(${text})` : text;
+  // Matches an occurrence: a term without an offset tests its word, -1:… the word before it, and so on; qualifiers
+  // test where that word stands.
+  // One term against an occurrence: the word its offset points at exists, matches the spelling and stands where the
+  // qualifiers say. Also used, with the spelling *, for rate bases (rateBase).
+  function occurrenceTerm(node) {
+    const tests = node.quals.map(qualifierTest);
+    return o => {
+      const i = indexAt(o, node.offset); if (i < 0) return false;
+      const word = node.offset ? (o.mergeQ ? core(o.line.words[i]) : o.line.words[i]) : o.word;
+      return glob(node.v, word) && tests.every(t => t(o.line, i));
     };
-    const tree = parsePattern(query);
-    return tree ? show(tree, null) : '';
+  }
+  function occurrencePattern(query = '') { return compileTree(parsePattern(query), occurrenceTerm); }
+  // A pattern tree with its grouping written out: NOT's scope always in parentheses, and a group of one operator
+  // inside the other in parentheses.
+  const flatten = (n, t) => n.t === t ? [...flatten(n.a, t), ...flatten(n.b, t)] : [n];
+  function showTree(n, parent = null) {
+    if (n.t === 'term') return `${n.offset ? `${n.offset}:` : ''}${n.quals.map(q => `[${q}]`).join('')}${n.v}`;
+    if (n.t === 'not') return `NOT (${showTree(n.a)})`;
+    const text = flatten(n, n.t).map(c => showTree(c, n.t)).join(n.t === 'and' ? ' AND ' : ' OR ');
+    return parent ? `(${text})` : text;
+  }
+  // The pattern written out that way; '' for an empty pattern.
+  function describePattern(query = '') { const tree = parsePattern(query); return tree ? showTree(tree) : ''; }
+  // The rate base of a search: the words standing where its pattern and its position filters require, so that a rate
+  // is matches per word in that class. Qualifiers restrict it ([pi]p* is rated over [pi]*); spellings, neighbor
+  // spellings, q states and locations never do. AND and OR combine the terms' bases. NOT keeps a base only over
+  // qualifiers alone (p* AND NOT [li]* is rated over NOT ([li]*)); NOT over a spelling too (NOT [pi]p*) leaves all
+  // words, as does OR with an unrestricted side. The Line class and Word position filters add their own qualifiers,
+  // and terms on the word itself merge into one ([pi]* AND [li]* reads [pi][li]*). Returns {all, text, test}: text in
+  // pattern syntax ('' for all words); test takes an occurrence or any {line, index, word}.
+  const FILTER_QUALIFIERS = {lineClass: {first: ['pi'], page: ['pgi'], later: ['lpi'], body: ['npi']}, position: {start: ['li'], end: ['lf'], interior: ['!li', '!lf']}};
+  function rateBase(config = {}) {
+    const placeOnly = n => n.t === 'term' ? n.quals.length > 0 && n.v === '*' : n.t === 'not' ? placeOnly(n.a) : placeOnly(n.a) && placeOnly(n.b);
+    const strip = n => {
+      if (!n) return null;
+      if (n.t === 'term') return n.quals.length ? {t: 'term', v: '*', quals: n.quals, offset: n.offset} : null;
+      if (n.t === 'not') {
+        if (!placeOnly(n.a)) return null;
+        // NOT of one code on the word itself reads as that code negated: NOT [li]* is [!li]*
+        const a = strip(n.a), one = a.t === 'term' && !a.offset && a.quals.length === 1;
+        return one ? {t: 'term', v: '*', quals: [a.quals[0].startsWith('!') ? a.quals[0].slice(1) : '!' + a.quals[0]], offset: 0} : {t: 'not', a};
+      }
+      const a = strip(n.a), b = strip(n.b);
+      return n.t === 'and' ? (a && b ? {t: 'and', a, b} : a || b) : (a && b ? {t: 'or', a, b} : null);
+    };
+    let node = config.mode === 'related' ? null : strip(parsePattern(config.query));
+    const quals = [...(FILTER_QUALIFIERS.lineClass[config.lineClass] || []), ...(FILTER_QUALIFIERS.position[config.position] || [])];
+    if (quals.length) { const filter = {t: 'term', v: '*', quals, offset: 0}; node = node ? {t: 'and', a: node, b: filter} : filter; }
+    if (node && node.t === 'and') {
+      const parts = flatten(node, 'and'), own = parts.filter(x => x.t === 'term' && !x.offset);
+      if (own.length > 1) node = [{t: 'term', v: '*', quals: [...new Set(own.flatMap(x => x.quals))], offset: 0}, ...parts.filter(x => !own.includes(x))].reduce((a, b) => ({t: 'and', a, b}));
+    }
+    if (!node) return {all: true, text: '', test: () => true};
+    return {all: false, text: showTree(node), test: compileTree(node, occurrenceTerm)};
+  }
+  // The qualifiers a pattern uses, in order of first use (for the line under a pattern box)
+  function patternQualifiers(query = '') {
+    const out = [], walk = n => { if (!n) return; if (n.t === 'term') n.quals.forEach(q => { if (!out.includes(q)) out.push(q); }); else { walk(n.a); walk(n.b); } };
+    walk(parsePattern(query)); return out;
   }
   function patternTerms(query = '') {
     const out = [], walk = n => { if (!n) return; if (n.t === 'term') out.push(n.v); else { walk(n.a); walk(n.b); } };
@@ -123,7 +229,7 @@
   }
   // The exact spelling a pattern names, or '' when it uses wildcards or operators (or does not parse).
   function literalWord(query = '') {
-    try { const tree = parsePattern(query); return tree && tree.t === 'term' && !tree.offset && !/[*?]/.test(tree.v) ? tree.v : ''; }
+    try { const tree = parsePattern(query); return tree && tree.t === 'term' && !tree.offset && !tree.quals.length && !/[*?]/.test(tree.v) ? tree.v : ''; }
     catch { return ''; }
   }
   function occurrences(lines, section = 'all', mergeQ = true) {
@@ -137,12 +243,12 @@
         start: index === 0, end: index === line.words.length - 1}] : []));
   }
   function conditions(config) {
-    const prev2 = pattern(config.prev2), prev = pattern(config.prev), next = pattern(config.next);
+    const prev2 = pattern(config.prev2), prev = pattern(config.prev), next = pattern(config.next), lineClass = lineClassTest(config.lineClass);
     return o => prev2(o.prev2) && prev(o.prev) && next(o.next) &&
       (!config.q || config.q === 'any' || (o.raw.startsWith('q') ? 'yes' : 'no') === config.q) &&
       (!config.nextQ || config.nextQ === 'any' || (o.nextRaw != null && (o.nextRaw.startsWith('q') ? 'yes' : 'no') === config.nextQ)) &&
       (!config.position || config.position === 'any' || (config.position === 'start' ? o.start : config.position === 'end' ? o.end : !o.start && !o.end)) &&
-      (!config.lineClass || config.lineClass === 'any' || (o.line.first ? 'first' : 'body') === config.lineClass);
+      lineClass(o.line);
   }
   function distance(a, b) {
     let row = Array.from({length: b.length + 1}, (_, i) => i);
@@ -322,7 +428,7 @@
   }
   // Which loci each scope of the search covers: running text is prose, circles and radii; labels are separate.
   const LOCI = {running: ['para', 'circle', 'radial'], all: ['para', 'circle', 'radial', 'label'], para: ['para'], label: ['label'], circle: ['circle'], radial: ['radial']};
-  const api = {LOCI, core, pattern, occurrencePattern, wordAt, parsePattern, describePattern, patternTerms, literalWord, occurrences, conditions, distance, search, neighborClass, neighborWord, filterNeighbors, keepNeighbors, neighborSummary, rateComparison, counts, score, simulate, populationCounts, qVariants, evalParts, evalLabel};
+  const api = {LOCI, core, pattern, occurrencePattern, wordAt, parsePattern, describePattern, patternTerms, literalWord, occurrences, markPageInitial, LINE_CLASSES, QUALIFIERS, qualifierName, patternQualifiers, rateBase, conditions, distance, search, neighborClass, neighborWord, filterNeighbors, keepNeighbors, neighborSummary, rateComparison, counts, score, simulate, populationCounts, qVariants, evalParts, evalLabel};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.EchoWorkbenchCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

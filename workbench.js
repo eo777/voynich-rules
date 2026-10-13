@@ -16,14 +16,16 @@
   const field = (id, label, html, wide = false) => `<div class="wb-field ${wide ? 'wide' : ''}"><label for="${id}">${label}</label>${html}</div>`;
   const select = (id, values, value) => `<select id="${id}">${options(values, value)}</select>`;
   const input = (id, value, placeholder = '') => `<input id="${id}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off">`;
-  // A pattern box with a line under it: a pattern with operators, with its grouping written out, or what stops
-  // the pattern from being read. It updates as you type (listener below). A word-pattern box matches occurrences
-  // and may test neighbors (-1:…); a box with scope 'word' (the neighbor boxes, the Residuals filter) matches one
-  // word, so it refuses them.
+  // A pattern box with a line under it: a pattern with operators, with its grouping written out, and the meaning of
+  // any qualifier it uses ([li] line initial …), or what stops the pattern from being read. It updates as you type
+  // (listener below). A word-pattern box matches occurrences and may test neighbors (-1:…) and qualifiers; a box
+  // with scope 'word' (the neighbor boxes, the Residuals filter) matches one word, so it refuses them.
   const reading = (value, scope = '') => {
     try {
       if (scope === 'word') C.pattern(value); else C.occurrencePattern(value);
-      const text = C.describePattern(value); return text && C.parsePattern(value).t !== 'term' ? `Reads as <code>${esc(text)}</code>` : '';
+      const text = C.describePattern(value), grouped = text && C.parsePattern(value).t !== 'term' ? `Reads as <code>${esc(text)}</code>` : '';
+      const where = C.patternQualifiers(value).map(q => `<code>[${q}]</code> ${esc(C.qualifierName(q))}`).join(' · ');
+      return [grouped, where].filter(Boolean).join(' · ');
     } catch (error) { return `<span class="wb-reading-error">${esc(error.message)}</span>`; }
   };
   const patternInput = (id, value, placeholder = '', scope = '') => `${input(id, value, placeholder).replace('<input ', `<input class="wb-pattern"${scope ? ` data-scope="${scope}"` : ''} `)}<div class="wb-reading" id="${id}-reading" aria-live="polite">${reading(value, scope)}</div>`;
@@ -33,8 +35,26 @@
     for (const [name, query, scope] of boxes) { try { if (scope === 'word') C.pattern(query); else C.occurrencePattern(query); } catch (error) { return `${name}: ${error.message}`; } }
     return '';
   }
-  // The pattern syntax, under every form with word patterns
-  const patternHelp = mergeQ => `Patterns match whole ${mergeQ ? 'q-merged' : 'original'} spellings: * = any letters, ? = one character. Combine patterns with AND, OR, NOT (or &amp;, |, !) and parentheses; -1:*k* tests the word before a match and 1:*k* the word after.`;
+  // The pattern syntax, under every form with word patterns: a collapsed table, one row per element, then notes
+  // (`more`: the form's own)
+  const PATTERN_SYNTAX = [
+    [['*'], 'any letters, or none', '*aiin'],
+    [['?'], 'one character', 'ch?y'],
+    [['AND', '&'], 'both', 'qok* AND *y'],
+    [['OR', '|'], 'either', 'chol OR chor'],
+    [['NOT', '!'], 'not; binds before AND, AND before OR', '*y AND NOT qo*'],
+    [['( )'], 'group', '(chol OR chor) AND 1:*y'],
+    [['-1:', '1:', '-2:', '…'], 'the word before or after a match, within its line', '*aiin AND -1:*k*'],
+    [['[li]'], 'the word starts its line', '[li]p*'],
+    [['[lf]'], 'the word ends its line', '[lf]*m'],
+    [['[pi]'], 'Line class: paragraph initial', '[pi]p*'],
+    [['[pgi]'], 'Line class: page initial (a page’s first prose line)', '[pgi]p*'],
+    [['[lpi]'], 'Line class: later paragraph initial', '[lpi]p*'],
+    [['[npi]'], 'Line class: not paragraph initial', '[npi]p*'],
+    [['[!code]'], '! inside the brackets negates that place only; the spelling still applies', '[!pgi]p*'],
+  ];
+  const patternHelp = (mergeQ, more = '') => `<details class="wb-syntax"><summary>Pattern syntax</summary><table class="wb-table wb-syntax-table"><thead><tr><th>Write</th><th>Meaning</th><th>Example</th></tr></thead><tbody>${PATTERN_SYNTAX.map(([w, m, e]) => `<tr><td>${w.map(x => x === '…' ? x : `<code>${esc(x)}</code>`).join(' ')}</td><td>${esc(m)}</td><td><code>${esc(e)}</code></td></tr>`).join('')}</tbody></table>
+    <ul class="wb-small wb-syntax-notes"><li>Patterns match whole ${mergeQ ? 'q-merged' : 'original'} spellings. Operator words are in capitals, because lowercase <code>or</code> is a Voynich word.</li><li><b><code>!</code> inside the brackets negates the place only:</b> <code>[!pgi]p*</code> is the p-words off a page’s first line, the same as <code>p* AND NOT [pgi]*</code>.</li><li><b><code>NOT</code> or <code>!</code> before a term negates all of it,</b> spelling included: <code>![pgi]p*</code> is every word except the page-initial p-words.</li><li>Qualifiers stack: <code>[pi][li]p*</code> opens a paragraph, and <code>[pi][!pgi]p*</code> is <code>[lpi]p*</code>.</li><li>With an offset, write the offset first: <code>-1:[li]*</code>.</li>${more}</ul></details>`;
   const neighborBoxes = s => [['Two words before', s.prev2, 'word'], ['Previous word', s.prev, 'word'], ['Next word', s.next, 'word']];
   // With Merge q on, every word and neighbor loses one initial q before matching, so a q-initial term finds nothing.
   const qMaskedIn = (mergeQ, queries) => mergeQ && queries.some(p => { try { return C.patternTerms(p).some(t => t.startsWith('q')); } catch { return false; } });
@@ -44,9 +64,29 @@
   const metric = (label, value, note = '') => `<div class="wb-metric"><span>${label}</span><strong>${value}</strong><span>${note}</span></div>`;
   const wordButton = (word, action = 'word') => `<button class="wb-word" data-action="${action}" data-word="${esc(word)}">${esc(word)}</button>`;
   const populations = D.sections.map(s => [s.key, s.label]);
-  const label = key => D.sections.find(s => s.key === key)?.label || key;
+  // Words & contexts can also search Golf v2's classes (key golf2:<code>): a line belongs to a class when its page's
+  // working class for its text kind is that class (manuscript.golf2, as the Golf v2 grouping)
+  const GOLF_POP = 'golf2:', isGolfPop = key => String(key || '').startsWith(GOLF_POP);
+  const GOLF2 = window.ECHO_MANUSCRIPT?.golf2;     // read here: M is declared further down
+  const golfPops = GOLF2 ? GOLF2.classes.map(c => [GOLF_POP + c.code, `Golf v2 ${c.code}: ${c.label.replace(': ', ', ')}`]) : [];
+  const populationMember = key => { if (!isGolfPop(key)) return l => l.sections.includes(key); const code = key.slice(GOLF_POP.length); return l => GOLF2.units[l.folio + '|' + (l.category || 'para')] === code; };
+  const label = key => D.sections.find(s => s.key === key)?.label || golfPops.find(p => p[0] === key)?.[1] || key;
+  // The population selects of Words & contexts: Echo's populations, then Golf v2's classes
+  const popSelect = (id, value) => `<select id="${id}"><optgroup label="Echo populations">${options(populations, value)}</optgroup>${golfPops.length ? `<optgroup label="Golf v2 classes">${options(golfPops.map(([k, l]) => [k, l.replace(/^Golf v2 /, '')]), value)}</optgroup>` : ''}</select>`;
   const cache = new Map();
-  const M = window.ECHO_MANUSCRIPT, manuscriptLines = M ? W.lines.concat(M.extra_lines) : W.lines;
+  const M = window.ECHO_MANUSCRIPT, manuscriptLines = C.markPageInitial(M ? W.lines.concat(M.extra_lines) : W.lines);
+  // Line classes (workbench_core.js LINE_CLASSES): paragraph initial is split into page initial (the first line of a
+  // page's prose, always paragraph initial) and later paragraph initial, indented under it; not paragraph initial is
+  // its complement. Names start with different words, so a narrow select still shows which is chosen. Declared before
+  // the Rule lab draft is restored below, which validates against it.
+  const LINE_CLASS_OPTIONS=[['any','Any'],['first','Paragraph initial'],['page','\u2003Page initial'],['later','\u2003Later paragraph initial'],['body','Not paragraph initial']];
+  // Rates over: the words where a search's pattern and its Line class and Word position filters can match
+  // (workbench_core.js rateBase), or every word in the loci. baseFor gives that base, or null for all words.
+  const RATE_OPTIONS=[['class','Its class'],['all','All words']];
+  const RATE_TIP='Its class: only the words where the pattern and the Line class and Word position filters can match, as [pi]p* over [pi]*. All words: every word in the loci.';
+  const baseFor=(config,rates)=>{if(rates==='all')return null;const b=C.rateBase(config);return b.all?null:b;};
+  const ratesField=(id,value)=>field(id,'Rates over',select(id,RATE_OPTIONS,value||'class').replace('<select',`<select title="${esc(RATE_TIP)}"`));
+  const LINE_CLASS_TIP='Paragraph initial = page initial (a page\u2019s first prose line) + later paragraph initial. Not paragraph initial: every other line.';
   // Loci of the Words & contexts search and its chart: running text (paragraphs, circles, radii: the default, which
   // keeps every earlier count), all loci with labels, or one category. Workbench lines are paragraph text; circle and
   // radial text belongs to no population, labels to the population of their page.
@@ -55,17 +95,17 @@
   const locusText = locus => (LOCUS_OPTIONS.find(o => o[0] === locus) || LOCUS_OPTIONS[0])[1].replace(/^\w/, c => c.toLowerCase());
   function linesFor(locus='running') { const key='lines|'+locus;if (!cache.has(key)) { const keep=new Set(LOCI[locus]||LOCI.running); cache.set(key, manuscriptLines.filter(l=>keep.has(l.category||'para'))); } return cache.get(key); }
   function manuscript(mergeQ=true, locus='running') { const key='manuscript|'+mergeQ+'|'+locus;if (!cache.has(key)) cache.set(key, C.occurrences(linesFor(locus), 'all', mergeQ)); return cache.get(key); }
-  function searchCorpus(section,mergeQ=true,locus='running') { const key='search|'+section+'|'+mergeQ+'|'+locus;if (!cache.has(key)) cache.set(key, C.occurrences(linesFor(locus), section, mergeQ)); return cache.get(key); }
+  function searchCorpus(section,mergeQ=true,locus='running') { const key='search|'+section+'|'+mergeQ+'|'+locus;if (!cache.has(key)) cache.set(key, isGolfPop(section)?C.occurrences(linesFor(locus).filter(populationMember(section)),'all',mergeQ):C.occurrences(linesFor(locus), section, mergeQ)); return cache.get(key); }
   function corpus(section,mergeQ=true) { const key=section+'|'+mergeQ;if (!cache.has(key)) cache.set(key, C.occurrences(W.lines, section,mergeQ)); return cache.get(key); }
   const defaults = () => ({name: 'daiin → aiin (candidate)', enabled: true, kind: 'exact', code: 'd', from: 'daiin', to: 'aiin', fraction: .45,
     prev2: '', prev: '', next: '', q: 'any', nextQ: 'any', position: 'any', lineClass: 'any'});
   const state = {tab: 'residuals', evaluation: Object.keys(W.residuals)[0], side: 'target', query: '', route: 'all', bin: '', residualPage: 0,
-    search: {mergeQ:false,section: 'HA_early', compare: 'HB_all', query: '*aiin', compareQuery: '', mode: 'glob', prev2: '', prev: '', next: '', q: 'any', nextQ: 'any', position: 'any', lineClass: 'any', folio: '', sheet: '', groupFilters: [], locus: 'running'}, contextPage: 0, qExclusions:{},
+    search: {mergeQ:false,section: 'HA_early', compare: 'HB_all', query: '*aiin', compareQuery: '', mode: 'glob', prev2: '', prev: '', next: '', q: 'any', nextQ: 'any', position: 'any', lineClass: 'any', folio: '', sheet: '', groupFilters: [], locus: 'running', rates: 'class'}, contextPage: 0, qExclusions:{},
     lab: {from: 'HA_early', to: 'HB_all', rules: [defaults()]}, result: null, preview: '', storage: '', chartSource: 'saved', neighborDrill: null, percentMode:'baseline', signalFilter:'all',neighborMode:'edges',neighborPages:{prev:0,next:0},reviewMinGap:1,reviewMinLift:2,reviewLargeGap:5,
     pageChart:{group:'section',measure:'count',pattern:'search',ordering:'manuscript',layout:'combined',unit:'page',bins:'auto',zeros:'show',range:'clip',open:true,hidden:{}},
     resMode:'saved',resFrom:'HA_early',resTo:'HB_all',resCls:'all',fitCompare:'e1',fitEval:0,fit:null,fitStatus:'',fitRunning:false,
     distView:{word:'',changed:false,labels:12,min:0,basis:'either'},autoFit:false,
-    patterns:{list:['*aiin','*ain'],mergeQ:false,locus:'running',prev2:'',prev:'',next:'',q:'any',nextQ:'any',position:'any',lineClass:'any',group:'section',measure:'per10k',barScale:'table',pinned:[],unit:'page',layout:'combined',ordering:'manuscript',bins:'auto',zeros:'show',range:'clip',hidden:{}}};
+    patterns:{list:['*aiin','*ain'],mergeQ:false,locus:'running',rates:'class',prev2:'',prev:'',next:'',q:'any',nextQ:'any',position:'any',lineClass:'any',group:'section',measure:'per10k',barScale:'table',pinned:[],unit:'page',layout:'combined',ordering:'manuscript',bins:'auto',zeros:'show',range:'clip',hidden:{},arrange:'mirror',yscale:'shared',colours:[]}};
   try { const saved = localStorage.getItem('echo-workbench-v1'); if (saved) state.lab = validate(JSON.parse(saved)); } catch { state.storage = 'The saved draft could not be loaded. A fresh candidate is shown.'; }
   function validate(obj) {
     if (obj.schema !== 1 || !populations.some(s => s[0] === obj.from) || !populations.some(s => s[0] === obj.to) || !Array.isArray(obj.rules) || obj.rules.length > 30) throw new Error('Use a version 1 Echo experiment with valid populations and at most 30 rules.');
@@ -79,7 +119,7 @@
       }
       if (!['known','exact','prefix','suffix','contains'].includes(clean.kind)) throw new Error('Unsupported edit type.');
       for (const k of ['q', 'nextQ']) if (!['any','yes','no'].includes(clean[k])) throw new Error('Invalid q filter.');
-      if (!['any','start','end','interior'].includes(clean.position) || !['any','first','body'].includes(clean.lineClass)) throw new Error('Invalid position filter.');
+      if (!['any','start','end','interior'].includes(clean.position) || !LINE_CLASS_OPTIONS.some(o=>o[0]===clean.lineClass)) throw new Error('Invalid position filter.');
       return clean;
     });
     return {from: obj.from, to: obj.to, rules};
@@ -325,7 +365,7 @@
       ${field(prefix+'-q', 'Focus q state', select(prefix+'-q', [['any','Either'],['yes','q present'],['no','q absent']], data.q))}
       ${field(prefix+'-nextQ', 'Next word q state', select(prefix+'-nextQ', [['any','Either / boundary'],['yes','q present'],['no','q absent']], data.nextQ))}${afterQ}
       ${field(prefix+'-position', 'Word position', select(prefix+'-position', [['any','Any'],['start','Line start'],['end','Line end'],['interior','Line interior']], data.position))}
-      ${field(prefix+'-lineClass', 'Line class', select(prefix+'-lineClass', [['any','Any'],['first','Paragraph initial'],['body','Other lines']], data.lineClass))}`;
+      ${field(prefix+'-lineClass', 'Line class', select(prefix+'-lineClass', LINE_CLASS_OPTIONS, data.lineClass).replace('<select', `<select title="${LINE_CLASS_TIP}"`))}`;
   }
   const contextKeys = ['prev2','prev','next','q','nextQ','position','lineClass'];
   function collectContext(prefix) { return Object.fromEntries(contextKeys.map(k => [k, document.getElementById(prefix+'-'+k).value])); }
@@ -392,7 +432,9 @@
     if(other.length)return `<p class="wb-small context-only-note">Only occurrences whose ${sideWord(side==='prev'?'next':'prev')} word is ${other.map(esc).join(' or ')}.</p>`;
     return '';
   }
-  function neighborPanel(side, a, b, nA, nB, baselines, sizes, tests) {
+  // Under each neighbor table when rates are over a class: the section baselines count that class only
+  const baseNote=(base,baseC)=>!base&&!baseC?'':`<p class="wb-small">Section baselines count only ${base&&baseC&&base.text===baseC.text?`words of ${esc(base.text)}`:`words of ${esc(base?.text||'every position')} (search) and ${esc(baseC?.text||'every position')} (comparison)`}, as the search does.</p>`;
+  function neighborPanel(side, a, b, nA, nB, baselines, sizes, tests, note = '') {
     const significant=r=>r.flagged;
     const keys=[...tests.keys()].filter(k=>{const t=tests.get(k),s=significant(t.section),f=significant(t.selection),h=significant(t.shared);return state.signalFilter==='all'||(state.signalFilter==='any'&&(s||f||h))||(state.signalFilter==='both'&&s&&f)||(state.signalFilter==='section'&&s)||(state.signalFilter==='selection'&&f)||(state.signalFilter==='shared'&&h);}).sort((x,y)=>(b.get(y)?.count||0)+(a.get(y)?.count||0)-(b.get(x)?.count||0)-(a.get(x)?.count||0)||x.localeCompare(y));
     // Paginate full-word rendering only; rates, flags and scale use all words.
@@ -402,7 +444,7 @@
     const scale=Math.max(.01,...keys.flatMap(k=>[a.get(k)?.count/Math.max(1,nA)||0,b.get(k)?.count/Math.max(1,nB)||0,...baselines.map((g,i)=>(g.get(k)?.count||0)/Math.max(1,sizes[i]))]));
     const cell=(n,total,compare,key)=>rateCell(n,total,baselines[+compare].get(key)?.count||0,sizes[+compare],scale);
     return `<section class="wb-card"><h3>${title}</h3>
-      <p class="wb-small">Click a group to see its words. Only and Exclude filter the whole search. Hover a rate for counts.</p>${onlyNote(side)}
+      <p class="wb-small">Click a group to see its words. Only and Exclude filter the whole search. Hover a rate for counts.</p>${note}${onlyNote(side)}
       ${(state.search.neighborExcluded?.[side]||[]).length?`<div class="context-exclusions"><span>Excluded neighbors:</span>${state.search.neighborExcluded[side].map(w=>`<button class="wb-button" data-action="neighbor-restore" data-side="${side}" data-word="${esc(w)}">${esc(w)} ×</button>`).join('')}<button class="wb-button" data-action="neighbor-restore-all" data-side="${side}">Restore neighbors</button></div>`:''}
       <div class="wb-scroll"><table class="wb-table context-rates"><thead><tr><th>${state.neighborMode==='word'?'Word':state.neighborMode==='gallows'?'Gallows':side==='prev'?'Ending':'Beginning'}</th><th>${esc(label(state.search.section))}</th><th>${esc(label(state.search.compare))}</th></tr></thead><tbody>${visibleKeys.map(key=>`<tr class="${groupFilters().some(g=>g.side===side&&g.mode===state.neighborMode&&g.key===key&&g.op==='exclude')?'neighbor-excluded':''}"><td><button class="wb-word neighbor-category" data-action="neighbor-drill" data-side="${side}" data-group="${esc(key)}" aria-controls="wb-neighbor-drill" aria-expanded="${state.neighborDrill?.side===side&&state.neighborDrill?.key===key}">${esc(key)}</button>${groupButtons(side,key)}${signalBadges(tests.get(key))}</td><td>${cell(a.get(key)?.count||0,nA,false,key)}</td><td>${cell(b.get(key)?.count||0,nB,true,key)}</td></tr>`).join('')}</tbody></table>${!keys.length?'<p class="wb-empty">No categories match this review filter.</p>':''}</div>${state.neighborMode==='word'?pager(page,keys.length,50,'neighbor-'+side):''}</section>`;
   }
@@ -436,10 +478,10 @@
     const qMasked=qMaskedIn(s.mergeQ,[s.query,s.compareQuery,s.prev2,s.prev,s.next]);
     return `${heading('02 / Follow words in context', 'Find forms. Read their neighbors.', 'Search related spellings and neighboring words across sections. Merge initial q or compare the original forms.')}
       <div class="wb-card"><div class="wb-fields">
-      ${field('wc-section','Search population',select('wc-section',populations,s.section))}${field('wc-compare','Compare with',select('wc-compare',populations,s.compare))}${button('Swap populations','context-swap')}
+      ${field('wc-section','Search population',popSelect('wc-section',s.section))}${field('wc-compare','Compare with',popSelect('wc-compare',s.compare))}${button('Swap populations','context-swap')}
       ${field('wc-query','Word / pattern',patternInput('wc-query',s.query,'*aiin'),true)}${field('wc-compareQuery','Comparison pattern (optional)',patternInput('wc-compareQuery',s.compareQuery,'Same as word pattern'),true)}${field('wc-mode','Match',select('wc-mode',[['glob','Word pattern'],['related','Within 2 character edits']],s.mode))}${qToggle('search')}
-      </div>${qMasked?'<div class="wb-notice">With Merge q on, initial q is removed before matching, so patterns starting with q find nothing.</div>':''}<details ${contextKeys.some(k => s[k] && s[k] !== 'any') || s.folio || s.sheet || (s.locus && s.locus !== 'running') ? 'open' : ''} style="margin-top:16px"><summary>Surrounding words, q state, loci and location</summary><div class="wb-fields">${contextFields('wc',s,qToggle('search filters'))}${field('wc-locus','Loci',select('wc-locus',LOCUS_OPTIONS,s.locus||'running'))}${field('wc-folio','Folio',select('wc-folio',[['','All folios'],...pageOptions],s.folio))}${field('wc-sheet','Physical sheet',select('wc-sheet',[['','All sheets'],...sheets],s.sheet))}</div></details>
-      <div class="wb-actions">${button('Search contexts','context-search','primary')}${button('Clear context filters','context-clear')}${button('Use in rule lab','context-lab')}${button('Export occurrences CSV','context-export')}</div><p class="wb-small">${patternHelp(s.mergeQ)} Neighbors never cross a line or unreadable gap; a word at a line start has no previous word, so NOT *y in the Previous word box keeps it. Original spellings remain visible in source lines.</p></div>`;
+      </div>${qMasked?'<div class="wb-notice">With Merge q on, initial q is removed before matching, so patterns starting with q find nothing.</div>':''}<details ${contextKeys.some(k => s[k] && s[k] !== 'any') || s.folio || s.sheet || (s.locus && s.locus !== 'running') || s.rates === 'all' ? 'open' : ''} style="margin-top:16px"><summary>Surrounding words, q state, loci and location</summary><div class="wb-fields">${contextFields('wc',s,qToggle('search filters'))}${field('wc-locus','Loci',select('wc-locus',LOCUS_OPTIONS,s.locus||'running'))}${ratesField('wc-rates',s.rates)}${field('wc-folio','Folio',select('wc-folio',[['','All folios'],...pageOptions],s.folio))}${field('wc-sheet','Physical sheet',select('wc-sheet',[['','All sheets'],...sheets],s.sheet))}</div></details>
+      <div class="wb-actions">${button('Search contexts','context-search','primary')}${button('Clear context filters','context-clear')}${button('Use in rule lab','context-lab')}${button('Export occurrences CSV','context-export')}</div>${patternHelp(s.mergeQ, '<li>Neighbors never cross a line or unreadable gap; a word at a line start has no previous word, so NOT *y in the Previous word box keeps it.</li><li>Original spellings remain visible in source lines.</li>')}</div>`;
   }
   function contexts() {
     const s = state.search, scope = searchCorpus(s.section,s.mergeQ,s.locus), compScope = searchCorpus(s.compare,s.mergeQ,s.locus);
@@ -455,15 +497,19 @@
     const compareCounts = C.counts(otherCandidates);
     const ordered = [...new Set([...forms.keys(), ...compareCounts.keys()])].map(w => [w, forms.get(w) || {n:0,sheets:new Set()}]).sort((a,b) => (b[1].n+(compareCounts.get(b[0])||0))-(a[1].n+(compareCounts.get(a[0])||0)));
     const selectedBySide=Object.fromEntries(['prev','next'].map(side=>[side,[found,compared].map(items=>C.filterNeighbors(items,side,s.neighborExcluded?.[side],s.mergeQ))]));
-    const fullBySide=Object.fromEntries(['prev','next'].map(side=>[side,[scope,compScope].map(items=>C.filterNeighbors(items,side,s.neighborExcluded?.[side],s.mergeQ))]));
+    // Rates over each search's class (rateBase): the section baselines, sizes and per-10k rates below count only the
+    // words where its pattern and position filters can match, so a search is compared with the same positions
+    const base=baseFor(s,s.rates),baseC=baseFor({...s,query:s.compareQuery||s.query},s.rates);
+    const scopeB=base?scope.filter(base.test):scope,compScopeB=baseC?compScope.filter(baseC.test):compScope;
+    const fullBySide=Object.fromEntries(['prev','next'].map(side=>[side,[scopeB,compScopeB].map(items=>C.filterNeighbors(items,side,s.neighborExcluded?.[side],s.mergeQ))]));
     const neighbors=Object.fromEntries(['prev','next'].map(side=>[side,selectedBySide[side].map(items=>C.neighborSummary(items,side,s.mergeQ,state.neighborMode))]));
-    // Baseline keeps the identical neighbor position and boundary rules but drops
-    // every focus-word/context/location filter. Do not use filtered denominators.
+    // Baseline keeps the identical neighbor position and boundary rules but drops every focus-word, neighbor and
+    // location filter: never filter it by the search itself. It keeps only the rate base (positions), above.
     const baselines=Object.fromEntries(['prev','next'].map(side=>[side,fullBySide[side].map(items=>C.neighborSummary(items,side,s.mergeQ,state.neighborMode))]));
-    const sizes=[scope.length,compScope.length];
+    const sizes=[scopeB.length,compScopeB.length];
     const testConfig={...s,neighborMode:state.neighborMode,testMethod:'review',reviewMinGap:state.reviewMinGap,reviewMinLift:state.reviewMinLift,reviewLargeGap:state.reviewLargeGap};
-    const tests=window.EchoContextStatistics.analyze([scope,compScope],[found,compared],testConfig);
-    const wordTests=state.neighborDrill?window.EchoContextStatistics.analyze([scope,compScope],[found,compared],testConfig,state.neighborDrill)[state.neighborDrill.side]:null;
+    const tests=window.EchoContextStatistics.analyze([scopeB,compScopeB],[found,compared],testConfig);
+    const wordTests=state.neighborDrill?window.EchoContextStatistics.analyze([scopeB,compScopeB],[found,compared],testConfig,state.neighborDrill)[state.neighborDrill.side]:null;
     const formCount=(n,size)=>`<b>${fmt(n)}</b><small>${size?fmt(n/size*10000):'—'} /10k</small>`;
     const qToggle=where=>contextQToggle(s,where);
     host.innerHTML = `<div class="wb-wrap">${contextSearchCard(s,scope)}
@@ -473,9 +519,9 @@
       ${s.section===s.compare?'<div class="wb-notice">Both selectors currently name the same population. With the same pattern and location scope, their counts will be identical.</div>':''}
       <div id="wb-page-chart"></div>
       <div class="wb-card context-display"><div class="wb-fields">${field('wc-neighbor-mode','Group neighbors',select('wc-neighbor-mode',[['edges','Ending / beginning'],['gallows','Gallows form'],['word','Full word']],state.neighborMode))}${field('wc-percent','Neighbor rates',select('wc-percent',[['baseline','Section baseline'],['conditional','Within search (%)'],['section','Per 10k eligible section pairs']],state.percentMode))}${field('wc-signals','Show categories',select('wc-signals',[['all','All categories'],['any','Any review flag'],['section','Section gap'],['selection','Selection gap'],['shared','Shared enrichment'],['both','Section + selection']],state.signalFilter))}</div><div class="rate-legend">${state.percentMode==='baseline'?'<span><i></i> Selected %</span><span><em></em> Section %</span>':''}<span>Shared ↑ enriched in both</span></div><details><summary>Review thresholds</summary><div class="wb-fields">${field('wc-review-gap','Min gap (pp)',`<input id="wc-review-gap" type="number" min="0" max="100" step="0.5" value="${state.reviewMinGap}">`)}${field('wc-review-lift','Min ratio (×)',`<input id="wc-review-lift" type="number" min="1" max="1000" step="0.5" value="${state.reviewMinLift}">`)}${field('wc-review-large','Always flag gap (pp)',`<input id="wc-review-large" type="number" min="0" max="100" step="1" value="${state.reviewLargeGap}">`)}</div><p class="wb-small">Flag a gap ≥ ${state.reviewMinGap} percentage points with a ≥ ${state.reviewMinLift}× rate ratio, or any gap ≥ ${state.reviewLargeGap} points. Small counts stay eligible. These are review cues.</p><p class="wb-small">Section: overall rate gap. Selection: difference between each selection’s gap above its section baseline, using the ratio of their lifts. Shared: enrichment clears the thresholds in both sections. Hover badges for gaps and counts. ${EchoDocs.link('apps/echo_rule_network/ANALYSIS_UI_NOTES.md','Method notes')}</p></details></div>
-      <div class="context-summaries">${['prev','next'].map(side=>neighborPanel(side,...neighbors[side],...selectedBySide[side].map(items=>items.length),baselines[side],fullBySide[side].map(items=>items.length),tests[side])).join('')}</div>
-      <div id="wb-neighbor-drill" aria-live="polite">${state.neighborDrill?neighborDrilldown(neighbors,baselines,selectedBySide[state.neighborDrill.side].map(items=>items.length),fullBySide[state.neighborDrill.side].map(items=>items.length),[scope,compScope],[found,compared],wordTests):''}</div>
-      <section class="wb-card"><div class="wb-row-title"><h3>Forms in this search</h3><label class="wb-small">Find form <input id="wc-form-find" type="search" placeholder="Filter this table" aria-label="Find form in table"></label></div><p class="wb-small">Uncheck a form to exclude it from both populations. Counts · rates per 10k section tokens. Dimmed rows are excluded.</p><div class="wb-scroll"><table class="wb-table context-forms"><thead><tr><th>Include / form</th><th>${esc(label(s.section))}</th><th>${esc(label(s.compare))}</th></tr></thead><tbody>${ordered.map(([w,f])=>`<tr data-form="${esc(w)}" class="${excluded.has(w)?'form-excluded':''}"><td><input type="checkbox" class="context-include" data-word="${esc(w)}" aria-label="Include ${esc(w)}" ${excluded.has(w)?'':'checked'}> ${wordButton(w)}<small>${f.sheets.size} search-population sheets</small></td><td>${formCount(f.n,sizes[0])}</td><td>${formCount(compareCounts.get(w)||0,sizes[1])}</td></tr>`).join('')}</tbody></table>${!ordered.length?'<p class="wb-empty">No forms match.</p>':''}</div></section>
+      <div class="context-summaries">${['prev','next'].map(side=>neighborPanel(side,...neighbors[side],...selectedBySide[side].map(items=>items.length),baselines[side],fullBySide[side].map(items=>items.length),tests[side],baseNote(base,baseC))).join('')}</div>
+      <div id="wb-neighbor-drill" aria-live="polite">${state.neighborDrill?neighborDrilldown(neighbors,baselines,selectedBySide[state.neighborDrill.side].map(items=>items.length),fullBySide[state.neighborDrill.side].map(items=>items.length),[scopeB,compScopeB],[found,compared],wordTests):''}</div>
+      <section class="wb-card"><div class="wb-row-title"><h3>Forms in this search</h3><label class="wb-small">Find form <input id="wc-form-find" type="search" placeholder="Filter this table" aria-label="Find form in table"></label></div><p class="wb-small">Uncheck a form to exclude it from both populations. Counts · rates per 10k section words${base||baseC?', in the class under each heading':''}. Dimmed rows are excluded.</p><div class="wb-scroll"><table class="wb-table context-forms"><thead><tr><th>Include / form</th><th>${esc(label(s.section))}${base?` <span class="rate-base">over ${esc(base.text)}</span>`:''}</th><th>${esc(label(s.compare))}${baseC?` <span class="rate-base">over ${esc(baseC.text)}</span>`:''}</th></tr></thead><tbody>${ordered.map(([w,f])=>`<tr data-form="${esc(w)}" class="${excluded.has(w)?'form-excluded':''}"><td><input type="checkbox" class="context-include" data-word="${esc(w)}" aria-label="Include ${esc(w)}" ${excluded.has(w)?'':'checked'}> ${wordButton(w)}<small>${f.sheets.size} search-population sheets</small></td><td>${formCount(f.n,sizes[0])}</td><td>${formCount(compareCounts.get(w)||0,sizes[1])}</td></tr>`).join('')}</tbody></table>${!ordered.length?'<p class="wb-empty">No forms match.</p>':''}</div></section>
       <details class="wb-card context-concordance" ${state.contextPage||state.concordanceOpen?'open':''}><summary>Concordance · ${fmt(found.length)} matching occurrences${['prev','next'].filter(side=>onlyWords(side).length).map(side=>` · ${sideWord(side)} word ${onlyWords(side).join(' or ')}`).join('')}</summary><p class="wb-small">Original spellings · full line, match highlighted${onlyWords('prev').length||onlyWords('next').length?' · the filtered neighbor is marked':''}</p>
       ${found.slice(state.contextPage*30,(state.contextPage+1)*30).map(o=>{
         // The whole transcript line, unreadable gaps kept as […]; match highlighted, filtered neighbor marked.
@@ -499,7 +545,8 @@
     if(!own)pc.pattern='search';
     const find=query=>C.search(manuscript(s.mergeQ,s.locus),{...s,query,folio:'',sheet:''});
     const query=pc.pattern==='compare'?s.compareQuery:s.query;
-    return {query,own,matches:find(query),compare:pc.pattern==='both'?{query:s.compareQuery,matches:find(s.compareQuery)}:null};
+    const baseOf=query=>baseFor({...s,query},s.rates);
+    return {query,own,matches:find(query),base:baseOf(query),compare:pc.pattern==='both'?{query:s.compareQuery,matches:find(s.compareQuery),base:baseOf(s.compareQuery)}:null};
   }
   function pageChartInfo(mode) {
     const link=(href,text)=>`<a class="wb-link" href="${href}" target="_blank" rel="noopener">${text}</a>`;
@@ -508,47 +555,88 @@
       currier:`Classic Currier A/B, as recorded in the transliteration. It leaves f57v, f65v and the astronomical, cosmological and zodiac pages f67–f73 unclassified; Zandbergen’s site gives f57v as B.`,
       hand:`Lisa Fagin Davis’s scribes, as recorded in the transliteration. f115r switches from hand 2 to hand 3 after line 12, so its lines are split between them.`,
       section:`Illustration type, as recorded in the transliteration.`,
-      comparison:`Grey pages are outside both populations. The f1/f8 and f58/f65 bifolia are in no Echo population: they are held out as exploratory sheets.`};
+      comparison:['Grey pages are outside both populations.',...([state.search.section,state.search.compare].some(k=>!isGolfPop(k))?['The f1/f8 and f58/f65 bifolia are in no Echo population: they are held out as exploratory sheets.']:[]),...([state.search.section,state.search.compare].some(isGolfPop)?['A Golf v2 class holds the text Golf v2 assigns to it, as in Group by Golf v2.']:[])].join(' ')};
     // Golf groupings: a short summary, and the pages behind the groups in a collapsed list, one line per group in
     // Golf's order (Golf's regime numbers, as in the group labels)
     const n=k=>(window.EchoPageChart?.GOLF_NUMBERS||{})[k]||'';
     const golf=(summary,lines)=>`${summary}<details class="pc-info-pages"><summary>Folio details</summary><ul>${lines.map(([group,pages])=>`<li><b>${group}</b> — ${pages}</li>`).join('')}</ul></details>`;
     const regime=`Golf regimes follow npcompl33t’s “${link('https://www.voynich.ninja/thread-6084.html','Independent Analysis Identifying Languages Beyond Currier A/B, compared to René Zandbergen')}” (Voynich Ninja, 17 Sep 2026). Golf's numbers: ${Object.entries(window.EchoPageChart?.GOLF_NUMBERS||{}).map(([k,v])=>`${v} ${M.regimes.find(r=>r.key===k)?.label||k}`).join(', ')}.`;
     const plus=` Golf regime + splits ${n('lateAP')} and ${n('HB')} by illustration type.`;
-    const plus2=` Golf regime ++ also splits ${n('earlyA')} and ${n('Stars')}, following Golf’s page clustering of 7 October 2026. Golf reads these as tendencies, not new regimes. The y-start and near-Bio groups are striped.`;
     const HB=[`${n('HB')}: Herbal B`,'herbal pages, plus f66r, f85r1, f85r2 and f86v3–f86v6 (text-only and cosmological)'];
     const tail=[[`${n('Cel')}: Celestial`,'the hand-4 text'],[`${n('f58')}: f58`,'f58r and f58v']];
     info.regime=golf(regime,[[...HB],...tail]);
     const split=[[`${n('lateAP')}: late Herbal A`,`herbal pages of regime ${n('lateAP')}`],[`${n('lateAP')}: Pharma`,`pharmaceutical pages of regime ${n('lateAP')}`],
       [HB[0],`herbal pages of regime ${n('HB')}`],[`${n('HB')}: non-herbal pages`,'f66r, f85r1, f85r2, f86v3–f86v6 (text-only and cosmological)']];
     info.regimeSplit=golf(regime+plus,[...split,...tail]);
-    info.regimeSplit2=golf(regime+plus+plus2,[
-      [`${n('earlyA')}: early A, ch-start`,'36 pages with more ch- and sh-initial words; Golf also counts f1r here, which has no regime in the app'],
-      [`${n('earlyA')}: early A, y-start`,'49 pages with more y-initial words; this split does not repeat in both line halves'],
-      ...split,
-      [`${n('Stars')}: Stars, near Herbal B`,'f104–f107, f113–f115'],
-      [`${n('Stars')}: Stars, near Bio`,'f103, f108, f111, f112, f116r; this split repeats in both line halves'],
-      ...tail]);
+    if((mode==='golf2'||mode==='golf2x')&&M.golf2)info[mode]=golfInfo[mode]||(golfInfo[mode]=golf(golf2Summary(mode),golfPages(mode)));
+    if((mode==='golf21'||mode==='golf21x')&&M.golf21)info[mode]=golfInfo[mode]||(golfInfo[mode]=golf(golf21Summary(mode),golfPages(mode)));
     return info[mode]?`<div class="pc-info">${info[mode]}</div>`:'';
   }
+  // Golf v2's and Golf v2.1's explainers (each also extended): the summary, and each group's pages by text kind in
+  // manuscript order (computed once per grouping)
+  const golfInfo={};
+  const golf2Summary=mode=>{const G=M.golf2,n=Object.keys(G.intermediate).length,between=G.intermediate_codes.map(x=>x.code).join(', ');
+    return `Golf v2 is Golf’s working classification (Golf 2.0, 8–9 October 2026). Prose, labels, circles and radii are classed separately, so one page can sit in several groups; label classes appear only when labels are in the loci. Primary numbers: 1 Early A, 2 Late A, 3 Herbal B / Stars-T, 4 Bio / Stars-S, 5 Celestial, 6 f58. Where Golf’s audit gave no class, a unit keeps its previous class, marked in Folio details; units with neither have no working class. No unit is moved to its nearest class. `
+      +(mode==='golf2x'?`Here Golf’s ${n} intermediate candidates, pages between two candidate classes, have groups of their own (${between}) apart from their working classes; uncheck them in the Groups menu to leave them out.`
+        :`Golf v2 extended shows Golf’s ${n} intermediate candidates apart.`);};
+  const golf21Summary=mode=>{const G=M.golf21,n=Object.keys(G.intermediate).length,between=G.intermediate_codes.map(x=>x.code).join(', ');
+    return `Golf v2.1 is Golf 2.1, Golf’s review classification of 10 October 2026. As in Golf v2, prose, labels, circles and radii are classed separately. A prose is split four ways: 1a and 1b (Early A), 1.5a (Transitional A, which Golf’s tests against reference pages support unevenly) and 2a (Late A / Pharma, Golf v2’s 2a and 2b together). Other text keeps its Golf 2.0 class. Units without a working class are grouped apart. `
+      +(mode==='golf21x'?`Here Golf’s ${n} intermediate candidates, units on an unresolved boundary between two classes, have groups named by that boundary (${between}); uncheck them in the Groups menu to leave them out.`
+        :`Golf v2.1 extended puts Golf’s ${n} intermediate candidates, units on an unresolved boundary between two classes, in groups of their own.`);};
+  // Each group's pages by text kind, in manuscript order. In a Golf v2 class, the units that kept their previous class
+  // (the audit gave none) are listed apart; a candidate group gives each page's working class.
+  function golfPages(mode){
+    const G=mode.startsWith('golf21')?M.golf21:M.golf2,g=chartGroup(mode),KIND={para:'prose',label:'labels',circle:'circles',radial:'radii'},order=new Map(M.pages.map((p,i)=>[p.folio,i]));
+    const kept=new Set(G.kept||[]),candidate=new Set(G.intermediate_codes.map(x=>x.code)),at={};
+    for(const l of manuscriptLines){
+      if(!l.words.some(Boolean))continue;
+      const k=g.keyOf(l),kind=l.category||'para',part=kept.has(l.folio+'|'+kind)&&!candidate.has(k)?'kept':'own';
+      (((at[k]??={})[part]??={})[kind]??=new Set()).add(l.folio);
+    }
+    const pages=(sets,k)=>Object.keys(KIND).filter(x=>sets?.[x]).map(x=>`${KIND[x]} ${[...sets[x]].sort((a,b)=>order.get(a)-order.get(b))
+      .map(f=>candidate.has(k)?`${f} (working ${G.units[f+'|'+x]||'none'})`:f).join(', ')}`).join('; ');
+    return g.groups.map(x=>[esc(x.label),[pages(at[x.key]?.own,x.key),at[x.key]?.kept?`previous class kept, audit unresolved: ${pages(at[x.key].kept,x.key)}`:''].filter(Boolean).join('; ')]);
+  }
+  // Golf's proposed path (manuscript.golf_path), under a chart ordered along it: what the positions are, and which
+  // units have none under this order (pages by their own text, or bifolia by their pooled text)
+  const PATH_ORDERS=['path','pathPos','pathBif','pathBifPos'];
+  function pathInfo(ordering,unit){
+    const P=M?.golf_path;if(!P||!PATH_ORDERS.includes(ordering))return '';
+    const placed=Object.values(P.pages),other=placed.filter(x=>x.text!=='para').length,none=M.pages.length-placed.length;
+    const unpooled=[...new Set(M.pages.map(p=>p.sheet))].filter(x=>!P.sheets[x]),bySheet=unit==='bifolium'||ordering==='pathBif'||ordering==='pathBifPos';
+    const placement=bySheet?`A bifolium takes the position of its pooled paragraph text${unpooled.length?`; sheets ${unpooled.join(' and ')} have none and come last`:''}.`
+      :`A page takes the position of its paragraph text, or else of its circular or radial text (${other} such pages); a further ${none} pages have neither and come last.`;
+    return `<div class="pc-info">Golf’s proposed path (10 October 2026) is a curve fitted through the ${Object.keys(P.sheets).length} pooled paragraph bifolia, from 0 at the Early A end (Golf’s group 1) to 1 at the Bio end. A position is distance along the curve, not time, and other routes fit almost as well. ${placement} At path positions the axis is the path itself, so its empty stretches stay empty; units too close to draw apart are nudged aside.</div>`;
+  }
   // Chart settings shared by Matches by page and Compare patterns, as [value, label] lists
-  const GROUP_OPTIONS=[['section','Section'],['regime','Golf regime'],['regimeSplit','Golf regime +'],['regimeSplit2','Golf regime ++'],['rz','RZ language'],['currier','Currier A/B'],['hand','LFD hand'],['comparison','Comparison']];
+  const GROUP_OPTIONS=[['section','Section'],['regime','Golf regime'],['regimeSplit','Golf regime +'],['golf2','Golf v2'],['golf2x','Golf v2 extended'],['golf21','Golf v2.1'],['golf21x','Golf v2.1 extended'],['rz','RZ language'],['currier','Currier A/B'],['hand','LFD hand'],['comparison','Comparison']];
   const UNIT_OPTIONS=[['page','Page'],['paragraph','Paragraph'],['bifolium','Bifolium'],['quire','Quire']];
   const LAYOUT_OPTIONS=[['combined','Bars'],['split','Bars split by group'],['histogram','Histograms by group']];
   const MEASURE_OPTIONS=[['count','Matches'],['percent','% of words'],['per10k','Per 10k words'],['perline','Matches per line']];
-  // A labelled chart select; `attr` names whose settings it changes (pc: Matches by page, pt: Compare patterns)
-  const chartSelect=(attr,key,label,cur,opts,title='')=>`<label class="pc-ctl"${title?` title="${esc(title)}"`:''}><span class="wb-small">${label}</span><select data-${attr}="${key}">${opts.map(([v,t])=>`<option value="${esc(v)}"${v===cur?' selected':''}>${esc(t)}</option>`).join('')}</select></label>`;
-  // Bifolia and quires are always in order of their first page
-  const fixedOrder=unit=>unit==='bifolium'||unit==='quire';
-  // Order for bars (pages and paragraphs only); bins, range and no-match units for histograms
-  const chartOrderControls=(attr,pc)=>pc.layout!=='histogram'?(!fixedOrder(pc.unit)?chartSelect(attr,'ordering','Order',pc.ordering,[['manuscript','Page order'],['bifolium','Bifolia together']]):'')
+  // How the pinned patterns of Compare patterns share the chart (page_chart.js arrangement)
+  const ARRANGE_TIP='Stacked: one bar per unit, a colored segment per pattern, the table’s first column at the bottom. Stacked 100%: the segments as shares of the bar. One row per pattern: each pattern in its own row, bars colored by group. Above and below: two patterns, the second below the axis.';
+  const ROW_SCALE_TIP='Shared: one scale for every row, so heights compare across patterns. Own per row: each row is scaled to its own tallest bar, so a rare pattern shows its shape.';
+  // A labelled chart select; `attr` names whose settings it changes (pc: Matches by page, pt: Compare patterns). An
+  // entry is [value, label], or {group, options} for an option group.
+  const chartSelect=(attr,key,label,cur,opts,title='')=>{const option=([v,t])=>`<option value="${esc(v)}"${v===cur?' selected':''}>${esc(t)}</option>`;
+    return `<label class="pc-ctl"${title?` title="${esc(title)}"`:''}><span class="wb-small">${label}</span><select data-${attr}="${key}">${opts.map(o=>Array.isArray(o)?option(o):`<optgroup label="${esc(o.group)}">${o.options.map(option).join('')}</optgroup>`).join('')}</select></label>`;};
+  // Orders (page_chart.js rowOrder): pages and paragraphs in page order, bifolia together, or along Golf's proposed
+  // path, page by page or bifolium by bifolium, evenly spaced by rank or at the path's own positions; bifolium units in
+  // order of their first page or along the path; quires always in quire order
+  const ORDER_OPTIONS={page:[['manuscript','Page order'],['bifolium','Bifolia together'],{group:'Golf’s proposed path',options:[['path','Pages by rank'],['pathPos','Pages at path positions'],['pathBif','Bifolia by rank'],['pathBifPos','Bifolia at path positions']]}],
+    bifolium:[['manuscript','First page order'],{group:'Golf’s proposed path',options:[['path','By rank'],['pathPos','At path positions']]}]};
+  // the order a unit can take: a bifolium unit keeps a path order's spacing, a quire keeps quire order
+  const unitOrder=(unit,ordering)=>unit==='quire'?'manuscript':unit==='bifolium'?({bifolium:'manuscript',pathBif:'path',pathBifPos:'pathPos'}[ordering]||ordering):ordering;
+  // Order for bars (not quires); bins, range and no-match units for histograms
+  const chartOrderControls=(attr,pc)=>pc.layout!=='histogram'?(pc.unit!=='quire'?chartSelect(attr,'ordering','Order',unitOrder(pc.unit,pc.ordering),ORDER_OPTIONS[pc.unit==='bifolium'?'bifolium':'page']):'')
     :chartSelect(attr,'bins','Bins',pc.bins,[['auto','Auto'],['6','About 6'],['12','About 12'],['24','About 24'],['48','About 48']])+chartSelect(attr,'range','Range',pc.range,[['clip','Outliers in one bin'],['full','Full range']])+chartSelect(attr,'zeros','No-match units',pc.zeros,[['show','Shown'],['hide','Hidden']]);
-  // The grouping a Color by setting names; the populations of `s` only matter for 'comparison'
-  const chartGroup=(mode,s={})=>{const colours=window.EchoColours||{};return window.EchoPageChart.grouping(mode,M,{search:s.section,compare:s.compare,label,populationColours:colours.population,regimeColours:colours.regime});};
+  // The grouping a Group by setting names; the populations of `s` only matter for 'comparison', and the text in view
+  // (`lines`) only for Golf v2, whose label classes are listed only when labels are in view
+  const chartGroup=(mode,s={},lines)=>{const colours=window.EchoColours||{};return window.EchoPageChart.grouping(mode,M,{search:s.section,compare:s.compare,label,member:populationMember,populationColours:colours.population,regimeColours:colours.regime,lines});};
   // A view's grouping without the groups hidden in its Groups menu (settings.hidden[mode]), and its lines filtered to the
   // groups shown: the chart, the table, the counts and the export then cover the shown groups only (page_chart.js hideGroups)
   function shownView(settings,s,lines){
-    const full=chartGroup(settings.group,s),v=window.EchoPageChart.hideGroups(full,(settings.hidden||{})[settings.group]||[],M.pages);
+    const full=chartGroup(settings.group,s,lines),v=window.EchoPageChart.hideGroups(full,(settings.hidden||{})[settings.group]||[],M.pages);
     return {full,group:v.group,hidden:v.hidden,keep:v.keep,lines:lines.filter(v.keep)};
   }
   // The Groups menu: one checkbox per group of the full grouping (checked = shown). `attr` names whose settings it changes.
@@ -559,7 +647,7 @@
       +`<div class="wb-menu-list">${full.groups.map(g=>`<label class="wb-menu-item pc-group"><input type="checkbox" data-hide="${attr}" value="${esc(g.key)}"${out.has(String(g.key))?'':' checked'}><i class="pc-sw" style="${window.EchoPageChart.paint(g)}"></i>${esc(g.label)}</label>`).join('')}`
       +`${out.size?`<button type="button" class="wb-menu-item" data-hide-all="${attr}">Show all</button>`:''}</div></details>`;
   };
-  // A Groups menu checkbox hides or shows its group of the current Color by; the menu stays open for the next choice.
+  // A Groups menu checkbox hides or shows its group of the current Group by; the menu stays open for the next choice.
   // The last shown group cannot be hidden.
   function bindGroupMenu(attr,settings,rerender){
     const boxes=[...host.querySelectorAll(`input[data-hide="${attr}"]`)];
@@ -573,20 +661,22 @@
     if(all)all.onclick=()=>{settings.hidden={...(settings.hidden||{}),[settings.group]:[]};reopenGroups=attr;rerender();};
   }
   // Page chart options from a settings object (measure, unit, layout, ordering, bins, range, zeros)
-  const chartView=pc=>({measure:pc.measure,ordering:fixedOrder(pc.unit)?'manuscript':pc.ordering,layout:pc.layout,unit:pc.unit,binning:{bins:pc.bins,zeros:pc.zeros!=='hide',clip:pc.range!=='full'},
-    names:{section:M.section_names,regime:Object.fromEntries(M.regimes.map(r=>[r.key,r.label]))}});
+  const chartView=pc=>({measure:pc.measure,ordering:unitOrder(pc.unit,pc.ordering),layout:pc.layout,unit:pc.unit,binning:{bins:pc.bins,zeros:pc.zeros!=='hide',clip:pc.range!=='full'},
+    names:{section:M.section_names,regime:Object.fromEntries(M.regimes.map(r=>[r.key,r.label]))},path:M.golf_path||null});
   function renderPageChart() {
     const el=document.getElementById('wb-page-chart'),P=window.EchoPageChart;if(!el)return;
     if(!M||!P){el.innerHTML='<div class="wb-notice">The page chart needs manuscript_data.js and page_chart.js. Run build_manuscript.py.</div>';return;}
     const s=state.search,pc=state.pageChart,found0=pageChartMatches(),{query,own}=found0;
     // groups hidden in the Groups menu leave the chart, the table and the counts
     const view=shownView(pc,s,linesFor(s.locus)),group=view.group,matches=found0.matches.filter(o=>view.keep(o.line));
-    const compare=found0.compare&&{...found0.compare,matches:found0.compare.matches.filter(o=>view.keep(o.line))};
-    const pagesIn=new Set(view.lines.map(l=>l.folio)).size, onPages=ms=>fmt(new Set(ms.map(o=>o.line.folio)).size), where=view.hidden.length?'in the shown groups':'in the whole manuscript';
+    const compare=found0.compare&&{...found0.compare,matches:found0.compare.matches.filter(o=>view.keep(o.line)),base:found0.compare.base?.test,baseText:found0.compare.base?.text||''};
+    // pages that can hold a match: with words in the charted patterns' rate bases (every page with text when none)
+    const tests=[found0,found0.compare].filter(Boolean).map(x=>x.base?.test),inBase=l=>tests.some(t=>!t)||l.words.some((w,i)=>w&&tests.some(t=>t({line:l,index:i,word:w})));
+    const pagesIn=new Set(view.lines.filter(inBase).map(l=>l.folio)).size, onPages=ms=>fmt(new Set(ms.map(o=>o.line.folio)).size), where=view.hidden.length?'in the shown groups':'in the whole manuscript';
     const found=compare?`▲ ${fmt(matches.length)} and ▼ ${fmt(compare.matches.length)} matches ${where}, on ${onPages(matches)} and ${onPages(compare.matches)} of ${fmt(pagesIn)} pages`
       :`${fmt(matches.length)} ${matches.length===1?'match':'matches'} ${where}, on ${onPages(matches)} of ${fmt(pagesIn)} pages`;
     el.innerHTML=`<details class="wb-card page-chart" ${pc.open?'open':''}><summary><h3>Matches by page</h3><span class="wb-small">${found}</span><button class="wb-button pc-share" data-share="pages" title="Copy a link that opens this chart with these settings">Share link</button></summary>
-      <div class="pc-controls">${chartSelect('pc','group','Color by',pc.group,GROUP_OPTIONS)}${groupMenu('pc',view.full,view.hidden,reopenGroups==='pc')}
+      <div class="pc-controls">${chartSelect('pc','group','Group by',pc.group,GROUP_OPTIONS)}${groupMenu('pc',view.full,view.hidden,reopenGroups==='pc')}
       ${chartSelect('pc','unit','Unit',pc.unit,UNIT_OPTIONS)}
       ${chartSelect('pc','layout','View',pc.layout,LAYOUT_OPTIONS)}
       ${chartSelect('pc','measure','Show',pc.measure,MEASURE_OPTIONS)}
@@ -595,19 +685,20 @@
       ${exportMenu('pc-export','pc-copy')}</div>
       <div class="pc-body"></div>
       <p class="wb-small pc-note">Every search filter on this page applies, over ${esc(locusText(s.locus))}${s.folio||s.sheet?`; the selected ${s.folio?'folio is':'sheet’s pages are'} highlighted and other pages stay visible`:''}.${pc.unit==='paragraph'?' Paragraphs follow the transcription’s paragraph starts; each page’s other loci form one unit.':''}${pc.unit==='bifolium'?' Bifolia are named by quire and folios: A:1-8 is folios 1 and 8 of quire A. A foldout counts as one bifolium.':''}${pc.unit==='quire'?' Quires are numbered from the transliteration’s quire letters (A = Q1).':''}${pc.layout==='histogram'?' Bins are shared by all groups; Auto sets their width from the spread of the units with matches.':''} Order and view never change the table.</p>
-      ${pageChartInfo(pc.group)}</details>`;
+      ${pageChartInfo(pc.group)}${pc.layout!=='histogram'?pathInfo(chartView(pc).ordering,pc.unit):''}</details>`;
     reopenGroups='';
     const d=el.querySelector('details');d.ontoggle=()=>{pc.open=d.open;};
     el.querySelectorAll('.pc-controls select[data-pc]').forEach(x=>{x.onchange=()=>{pc[x.dataset.pc]=x.value;renderPageChart();};});
     bindGroupMenu('pc',pc,renderPageChart);
-    P.mount(el.querySelector('.pc-body'),{pages:M.pages,lines:view.lines,matches,compare,query,group,...chartView(pc),highlight:{folio:s.folio,sheet:s.sheet}});
+    P.mount(el.querySelector('.pc-body'),{pages:M.pages,lines:view.lines,matches,compare,query,group,...chartView(pc),highlight:{folio:s.folio,sheet:s.sheet},base:found0.base?.test||null,baseText:found0.base?.text||''});
   }
 
   // ------------------------------------------------------------------ Compare patterns
   // Several word patterns side by side: one column per pattern, one row per group of the manuscript, each cell the
   // group's value under the measure. Built from the parts Words & contexts uses: the pattern matcher and search engine
   // (workbench_core.js), the neighbor, q and line filters (contextFields), the groupings, statistics and table cells
-  // of the page chart (page_chart.js), and the Matches by page chart for one or two pinned columns.
+  // of the page chart (page_chart.js), and the Matches by page chart for the pinned columns: one, two mirrored, or any
+  // number stacked or in rows, in table order.
   const PT_MAX=20;
   const ptAbbrev=(t,n=40)=>window.EchoPageChart.cutLabel(t,n);   // the chart's own cut, at a whole term
   // Reads the form into state: the patterns as typed, the filters, the loci and Merge q
@@ -617,23 +708,23 @@
     if(document.getElementById('pt-prev2'))Object.assign(m,collectContext('pt'));
     const locus=document.getElementById('pt-locus');if(locus)m.locus=locus.value;
     const merge=document.getElementById('pt-mergeq');if(merge)m.mergeQ=merge.checked;
+    const rates=document.getElementById('pt-rates');if(rates)m.rates=rates.value;
   }
   // Each non-empty pattern's matches in the whole manuscript, in the chosen loci, with every filter applied
   function ptSeries(){
     const m=state.patterns,items=manuscript(m.mergeQ,m.locus);
     const config={mergeQ:m.mergeQ,mode:'glob',prev2:m.prev2,prev:m.prev,next:m.next,q:m.q,nextQ:m.nextQ,position:m.position,lineClass:m.lineClass};
-    return m.list.map((query,i)=>({i,query:query.trim()})).filter(x=>x.query).map(x=>({...x,matches:C.search(items,{...config,query:x.query})}));
+    return m.list.map((query,i)=>({i,query:query.trim()})).filter(x=>x.query).map(x=>({...x,matches:C.search(items,{...config,query:x.query}),base:baseFor({...config,query:x.query},m.rates)}));
   }
-  const ptStats=(series,group,lines)=>{const P=window.EchoPageChart;return series.map(x=>P.statistics(P.unitModel(M.pages,lines,x.matches,group,'page'),group,state.patterns.measure));};
-  function ptForm(m){
-    const mark=i=>{const k=m.pinned.indexOf(i);return k<0?'':k?' ▼':' ▲';};
+  const ptStats=(series,group,lines)=>{const P=window.EchoPageChart;return series.map(x=>P.statistics(P.unitModel(M.pages,lines,x.matches,group,'page',x.base?.test||null),group,state.patterns.measure));};
+  function ptForm(m,mark=()=>''){
     const box=(q,i)=>`<div class="wb-field pt-field"><div class="pt-label"><label for="pt-p${i}">Pattern ${i+1}${mark(i)}</label>${m.list.length>1?`<button type="button" class="pt-remove" data-action="pt-remove" data-index="${i}" aria-label="Remove pattern ${i+1}">Remove</button>`:''}</div>${patternInput('pt-p'+i,q,i?'':'*aiin')}</div>`;
-    const open=contextKeys.some(k=>m[k]&&m[k]!=='any')||m.locus!=='running'||m.mergeQ;
+    const open=contextKeys.some(k=>m[k]&&m[k]!=='any')||m.locus!=='running'||m.mergeQ||m.rates==='all';
     return `<div class="wb-card"><div class="wb-fields pt-fields">${m.list.map(box).join('')}</div>
       ${qMaskedIn(m.mergeQ,[...m.list,m.prev2,m.prev,m.next])?'<div class="wb-notice">With Merge q on, initial q is removed before matching, so patterns starting with q find nothing.</div>':''}
-      <details ${open?'open':''} style="margin-top:16px"><summary>Surrounding words, q state and loci</summary><div class="wb-fields">${contextFields('pt',m)}${field('pt-locus','Loci',select('pt-locus',LOCUS_OPTIONS,m.locus))}<label class="context-q" title="Pool initial q with the unprefixed form"><input id="pt-mergeq" type="checkbox" ${m.mergeQ?'checked':''}> Merge q</label></div></details>
+      <details ${open?'open':''} style="margin-top:16px"><summary>Surrounding words, q state and loci</summary><div class="wb-fields">${contextFields('pt',m)}${field('pt-locus','Loci',select('pt-locus',LOCUS_OPTIONS,m.locus))}${ratesField('pt-rates',m.rates)}<label class="context-q" title="Pool initial q with the unprefixed form"><input id="pt-mergeq" type="checkbox" ${m.mergeQ?'checked':''}> Merge q</label></div></details>
       <div class="wb-actions">${button('Compare','pt-compare','primary')}${m.list.length<PT_MAX?button('Add pattern','pt-add'):''}</div>
-      <p class="wb-small">${patternHelp(m.mergeQ)} The filters apply to all patterns.</p></div>`;
+      ${patternHelp(m.mergeQ, '<li>The filters apply to all patterns.</li>')}</div>`;
   }
   function patterns(){
     const m=state.patterns,P=window.EchoPageChart;
@@ -642,22 +733,32 @@
     if(problem){host.innerHTML=`<div class="wb-wrap">${title}${ptForm(m)}<div class="wb-notice wb-error" role="alert">${esc(problem)}</div></div>`;bind();return;}
     // groups hidden in the Groups menu leave the table, the pinned chart and the export
     const view=shownView(m,{},linesFor(m.locus)),group=view.group,series=ptSeries().map(x=>({...x,matches:x.matches.filter(o=>view.keep(o.line))})),stats=ptStats(series,group,view.lines);
-    m.pinned=m.pinned.filter(i=>series.some(x=>x.i===i)).slice(0,2);
-    const top=title+ptForm(m);
-    const full=m.pinned.length>=2,unit=(UNIT_OPTIONS.find(o=>o[0]===m.unit)||UNIT_OPTIONS[0])[1].toLowerCase();
+    m.pinned=m.pinned.filter(i=>series.some(x=>x.i===i));
+    // the pinned columns are charted in table order; each keeps its colour while others come and go (assignColours)
+    const charted=series.filter(x=>m.pinned.includes(x.i));
+    m.colours=P.assignColours(m.list.map((q,i)=>m.colours[i]||''),charted.map(x=>x.i));
+    const arrange=P.arrangement(charted.length,m.arrange,m.layout==='histogram'),stack=arrange==='stack'||arrange==='stack100';
+    // a charted pattern's mark: ▲ or ▼ when two are mirrored, its colour in a stack
+    const swatchOf=i=>`<i class="pc-sw pt-sw" style="background:var(${P.seriesColour(m.colours[i])})"></i>`;
+    const mark=(i,form)=>{const k=charted.findIndex(x=>x.i===i);return k<0?'':arrange==='mirror'?(form?(k?' ▼':' ▲'):(k?'▼ ':'▲ ')):stack?swatchOf(i):'';};
+    const top=title+ptForm(m,i=>mark(i,true));
+    const unit=(UNIT_OPTIONS.find(o=>o[0]===m.unit)||UNIT_OPTIONS[0])[1].toLowerCase();
     const head=(x,c)=>{
-      const k=m.pinned.indexOf(x.i),on=k>=0,tip=full&&!on?'Two columns are pinned; unpin one first':on?'Remove this column from the chart':'Chart this column by page, paragraph, bifolium or quire';
+      const on=m.pinned.includes(x.i),tip=on?'Remove this column from the chart':'Chart this column by page, paragraph, bifolium or quire';
       const move=(d,glyph,side)=>`<button type="button" class="wb-button pt-move" data-action="pt-move" data-dir="${d}" data-index="${x.i}" data-to="${(series[c+d]||{}).i??''}" aria-label="Move pattern ${x.i+1} ${side}" title="Move ${side}"${series[c+d]?'':' disabled'}>${glyph}</button>`;
-      return `<div class="pt-headbox"><span class="pt-pattern">${on?(k?'▼ ':'▲ '):''}<span class="pt-n">#${x.i+1}</span>${esc(ptAbbrev(x.query))}</span><div class="pt-head-actions">${move(-1,'◀','left')}${move(1,'▶','right')}<button type="button" class="wb-button pt-pin${on?' on':''}" data-action="pt-pin" data-index="${x.i}" aria-pressed="${on}"${full&&!on?' disabled':''} title="${tip}">${on?'Unpin':'Pin'}</button></div></div>`;
+      return `<div class="pt-headbox"><span class="pt-pattern">${mark(x.i)}<span class="pt-n">#${x.i+1}</span>${esc(ptAbbrev(x.query))}</span>${x.base&&m.measure!=='count'?`<span class="rate-base" title="Rates over the words of ${esc(x.base.text)}">over ${esc(x.base.text)}</span>`:''}<div class="pt-head-actions">${move(-1,'◀','left')}${move(1,'▶','right')}<button type="button" class="wb-button pt-pin${on?' on':''}" data-action="pt-pin" data-index="${x.i}" aria-pressed="${on}" title="${tip}">${on?'Unpin':'Pin'}</button></div></div>`;
     };
-    const pinned=m.pinned.map(i=>series.find(x=>x.i===i));
+    // how the charted patterns share the chart: stacks need bars; mirroring needs exactly two
+    const ARRANGE=[...(m.layout==='histogram'?[]:[['stack','Stacked'],['stack100','Stacked 100%']]),['rows','One row per pattern'],...(charted.length===2?[['mirror','Above and below (▲ ▼)']]:[])];
+    const legend=arrange==='mirror'?`▲ #${charted[0].i+1} ${esc(ptAbbrev(charted[0].query))} · ▼ #${charted[1].i+1} ${esc(ptAbbrev(charted[1].query))}`
+      :charted.length>2?`Patterns ${charted.map(x=>'#'+(x.i+1)).join(', ')}`:charted.map(x=>`#${x.i+1} ${esc(ptAbbrev(x.query))}`).join(' · ');
     host.innerHTML=`<div class="wb-wrap">${top}
       <section class="wb-card" id="wb-patterns-table"><div class="wb-row-title"><h3>By group</h3><button class="wb-button" data-share="patterns" title="Copy a link that opens this table with these patterns and settings">Share link</button></div>
-      <div class="pc-controls">${chartSelect('pt','group','Color by',m.group,GROUP_OPTIONS.filter(o=>o[0]!=='comparison'),m.pinned.length?'Also sets the pinned chart’s Color by':'')}${groupMenu('pt',view.full,view.hidden,reopenGroups==='pt')}${chartSelect('pt','measure','Show',m.measure,MEASURE_OPTIONS)}<div class="pc-ctl"><span class="wb-small" id="pt-bars-label">Bar scale</span><div class="seg" role="group" aria-labelledby="pt-bars-label">${[['table','Table','One scale for the whole table: compare columns'],['column','Column','One scale per column: compare groups within a column']].map(([v,t,tip])=>`<button type="button" data-ptscale="${v}" class="${m.barScale===v?'on':''}" aria-pressed="${m.barScale===v}" title="${tip}">${t}</button>`).join('')}</div></div>${series.length?exportMenu('pt-export','pt-copy'):''}</div>
+      <div class="pc-controls">${chartSelect('pt','group','Group by',m.group,GROUP_OPTIONS.filter(o=>o[0]!=='comparison'),m.pinned.length?'Also sets the pinned chart’s Group by':'')}${groupMenu('pt',view.full,view.hidden,reopenGroups==='pt')}${chartSelect('pt','measure','Show',m.measure,MEASURE_OPTIONS)}<div class="pc-ctl"><span class="wb-small" id="pt-bars-label">Bar scale</span><div class="seg" role="group" aria-labelledby="pt-bars-label">${[['table','Table','One scale for the whole table: compare any two cells'],['column','Column','One scale per column: compare groups within a pattern'],['row','Row','One scale per row: compare patterns within a group']].map(([v,t,tip])=>`<button type="button" data-ptscale="${v}" class="${m.barScale===v?'on':''}" aria-pressed="${m.barScale===v}" title="${tip}">${t}</button>`).join('')}</div></div>${series.length?exportMenu('pt-export','pt-copy'):''}</div>
       ${series.length?P.seriesTable(series.map((x,j)=>({stats:stats[j],head:head(x,j),title:`Pattern ${x.i+1}: ${x.query}`})),m.measure,{scale:m.barScale}):'<div class="wb-empty">Enter a pattern above.</div>'}
-      <p class="wb-small">Counted over ${esc(locusText(m.locus))}${m.mergeQ?', q merged':''}. Pin up to two columns to chart them by page, paragraph, bifolium or quire.</p>${pageChartInfo(m.group)}</section>
-      ${pinned.length?`<section class="wb-card" id="wb-patterns-chart"><div class="wb-row-title"><h3>Pinned, by ${esc(unit)}</h3><span class="wb-small pt-legend" title="${esc(pinned.map((x,k)=>`${k?'▼':'▲'} #${x.i+1} ${x.query}`).join('\n'))}">▲ #${pinned[0].i+1} ${esc(ptAbbrev(pinned[0].query))}${pinned[1]?` · ▼ #${pinned[1].i+1} ${esc(ptAbbrev(pinned[1].query))}`:''}</span></div>
-      <div class="pc-controls">${chartSelect('pt','group','Color by',m.group,GROUP_OPTIONS.filter(o=>o[0]!=='comparison'),'Also sets the table’s Color by')}${chartSelect('pt','unit','Unit',m.unit,UNIT_OPTIONS)}${chartSelect('pt','layout','View',m.layout,LAYOUT_OPTIONS)}${chartOrderControls('pt',m)}</div><div class="pt-key">${group.groups.map(g=>`<span><i class="pc-sw" style="${P.paint(g)}"></i>${esc(g.label)}</span>`).join('')}</div><div class="pc-body"></div></section>`:''}</div>`;
+      <p class="wb-small">Counted over ${esc(locusText(m.locus))}${m.mergeQ?', q merged':''}. Pin columns to chart them by page, paragraph, bifolium or quire.</p>${pageChartInfo(m.group)}</section>
+      ${charted.length?`<section class="wb-card" id="wb-patterns-chart"><div class="wb-row-title"><h3>Pinned, by ${esc(unit)}</h3><span class="wb-small pt-legend" title="${esc(charted.map(x=>`#${x.i+1} ${x.query}`).join('\n'))}">${legend}</span></div>
+      <div class="pc-controls">${chartSelect('pt','group','Group by',m.group,GROUP_OPTIONS.filter(o=>o[0]!=='comparison'),'Also sets the table’s Group by')}${chartSelect('pt','unit','Unit',m.unit,UNIT_OPTIONS)}${chartSelect('pt','layout','View',m.layout,LAYOUT_OPTIONS)}${chartSelect('pt','measure','Show',m.measure,MEASURE_OPTIONS,'What the bars measure. Also sets the table’s Show')}${charted.length>1?chartSelect('pt','arrange','Patterns',arrange,ARRANGE,ARRANGE_TIP):''}${arrange==='rows'&&m.layout!=='histogram'?chartSelect('pt','yscale','Row scale',m.yscale,[['shared','Shared'],['own','Own per row']],ROW_SCALE_TIP):''}${chartOrderControls('pt',m)}</div><div class="pc-body"></div>${m.layout!=='histogram'?pathInfo(chartView(m).ordering,m.unit):''}</section>`:''}</div>`;
     reopenGroups='';
     // a setting changed on the pinned chart's card keeps that chart where it was on screen (the table above may change
     // height), with the focus back on the same control
@@ -666,8 +767,11 @@
       const card=onChart&&document.getElementById('wb-patterns-chart');if(card){host.scrollTop+=card.getBoundingClientRect().top-top;card.querySelector(`select[data-pt="${x.dataset.pt}"]`)?.focus({preventScroll:true});}};});
     bindGroupMenu('pt',m,()=>{ptCollect();patterns();});
     host.querySelectorAll('[data-ptscale]').forEach(b=>{b.onclick=()=>{ptCollect();m.barScale=b.dataset.ptscale;patterns();host.querySelector(`[data-ptscale="${m.barScale}"]`)?.focus();};});
-    if(pinned.length)P.mount(host.querySelector('#wb-patterns-chart .pc-body'),{pages:M.pages,lines:view.lines,matches:pinned[0].matches,query:`#${pinned[0].i+1} ${ptAbbrev(pinned[0].query)}`,labelLength:60,
-      compare:pinned[1]?{matches:pinned[1].matches,query:`#${pinned[1].i+1} ${ptAbbrev(pinned[1].query)}`}:null,group,...chartView(m),slot:'patterns',showTable:false});
+    // a colour chosen in the chart's key belongs to its pattern ('' = the next free automatic colour)
+    if(charted.length)P.mount(host.querySelector('#wb-patterns-chart .pc-body'),{pages:M.pages,lines:view.lines,group,...chartView(m),slot:'patterns',showTable:false,labelLength:60,groupKey:true,
+      series:charted.map(x=>({matches:x.matches,query:`#${x.i+1} ${ptAbbrev(x.query)}`,tag:`#${x.i+1}`,title:`#${x.i+1} ${x.query}`,base:x.base?.test||null,baseText:x.base?.text||'',colour:P.seriesColour(m.colours[x.i])})),
+      arrange:m.arrange,rowScale:m.yscale,
+      onColour:(k,id)=>{ptCollect();m.colours[charted[k].i]=id;patterns();host.querySelector(`#wb-patterns-chart .pc-colour[data-s="${k}"]`)?.focus();}});
     bind();
   }
   // The table as shown, header first: one row per shown group and the total, one column per pattern, each cell the
@@ -677,21 +781,23 @@
     const stats=ptStats(series,view.group,view.lines);
     const unit={count:'matches',percent:'% of words',per10k:'per 10k words',perline:'matches per line'}[m.measure];
     const value=s=>m.measure==='count'?s.matches:m.measure==='percent'?+(100*(s.rate||0)).toFixed(4):m.measure==='per10k'?+(s.per10k||0).toFixed(2):+(s.perLine||0).toFixed(4);
-    return {name:'echo-pattern-comparison.csv',rows:[[`Group (${unit})`,...series.map(x=>`#${x.i+1} ${x.query}`)],
+    return {name:'echo-pattern-comparison.csv',rows:[[`Group (${unit})`,...series.map(x=>`#${x.i+1} ${x.query}${x.base&&m.measure!=='count'?` (over ${x.base.text})`:''}`)],
       ...stats[0].rows.map((g,i)=>[g.label,...stats.map(st=>value(st.rows[i]))]),[stats[0].total.label,...stats.map(st=>value(st.total))]]};
   }
-  // Patterns in a link: p1, p2, ... (the non-empty ones, in order) and pin=1,2 (positions in that list)
+  // Patterns in a link: p1, p2, ... (the non-empty ones, in order), pin=1,3 (positions in that list) and each pinned
+  // pattern's colour as c1, c3, ... (page_chart.js SERIES_COLOURS ids)
   function ptLink(){
     const m=state.patterns,kept=m.list.map((q,i)=>[q.trim(),i]).filter(([q])=>q),out={};
-    kept.forEach(([q],j)=>{out['p'+(j+1)]=q;});
+    kept.forEach(([q,i],j)=>{out['p'+(j+1)]=q;if(m.pinned.includes(i)&&m.colours[i])out['c'+(j+1)]=m.colours[i];});
     const pins=m.pinned.map(i=>kept.findIndex(k=>k[1]===i)+1).filter(n=>n>0);if(pins.length)out.pin=pins;
     return out;
   }
   function ptApply(params){
     const R=window.EchoViewState.read,keys=Object.keys(params).filter(k=>/^p\d+$/.test(k)).sort((a,b)=>a.slice(1)-b.slice(1));
-    const list=keys.map(k=>R.text(params[k])).filter(Boolean).slice(0,PT_MAX);if(!list.length)return 0;
-    state.patterns.list=list;
-    state.patterns.pinned=[...new Set((R.list(params.pin)||[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=list.length).map(n=>n-1))].slice(0,2);
+    const kept=keys.map(k=>[R.text(params[k]),params['c'+k.slice(1)]]).filter(([q])=>q).slice(0,PT_MAX),list=kept.map(([q])=>q);if(!list.length)return 0;
+    const ids=window.EchoPageChart.SERIES_COLOURS.map(c=>c.id);
+    state.patterns.list=list;state.patterns.colours=kept.map(([,c])=>R.oneOf(c,ids)||'');
+    state.patterns.pinned=[...new Set((R.list(params.pin)||[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=list.length).map(n=>n-1))];
     return list.length;
   }
 
@@ -752,7 +858,7 @@
   }
   function collectSearch() {
     const mergeQ=state.search.mergeQ;
-    state.search={neighborExcluded:state.search.neighborExcluded||{},neighborOnly:state.search.neighborOnly||{},groupFilters:state.search.groupFilters||[],excluded:state.search.excluded||[],section:document.getElementById('wc-section').value,compare:document.getElementById('wc-compare').value,query:document.getElementById('wc-query').value,compareQuery:document.getElementById('wc-compareQuery').value,mode:document.getElementById('wc-mode').value,...collectContext('wc'),folio:document.getElementById('wc-folio').value,sheet:document.getElementById('wc-sheet').value,locus:document.getElementById('wc-locus')?.value||state.search.locus||'running'};state.contextPage=0;
+    state.search={neighborExcluded:state.search.neighborExcluded||{},neighborOnly:state.search.neighborOnly||{},groupFilters:state.search.groupFilters||[],excluded:state.search.excluded||[],section:document.getElementById('wc-section').value,compare:document.getElementById('wc-compare').value,query:document.getElementById('wc-query').value,compareQuery:document.getElementById('wc-compareQuery').value,mode:document.getElementById('wc-mode').value,...collectContext('wc'),folio:document.getElementById('wc-folio').value,sheet:document.getElementById('wc-sheet').value,locus:document.getElementById('wc-locus')?.value||state.search.locus||'running',rates:document.getElementById('wc-rates')?.value||state.search.rates||'class'};state.contextPage=0;
     state.search.mergeQ=mergeQ;state.neighborPages={prev:0,next:0};
   }
   function reportError(error) {
@@ -818,15 +924,16 @@
   function pageChartTable() {
     const s=state.search,unit=state.pageChart.unit,found0=pageChartMatches(),query=found0.query,P=window.EchoPageChart,view=shownView(state.pageChart,s,linesFor(s.locus)),group=view.group;
     const matches=found0.matches.filter(o=>view.keep(o.line)),compare=found0.compare&&{...found0.compare,matches:found0.compare.matches.filter(o=>view.keep(o.line))};
-    const model=ms=>P.unitModel(M.pages,view.lines,ms,group,unit),all=model(matches),allC=compare&&model(compare.matches);
-    const keep=all.map((r,i)=>i).filter(i=>all[i].totalTokens);
+    const model=(ms,b)=>P.unitModel(M.pages,view.lines,ms,group,unit,b?.test||null),all=model(matches,found0.base),allC=compare&&model(compare.matches,found0.compare.base);
+    const keep=all.map((r,i)=>i).filter(i=>all[i].totalTokens||allC?.[i].totalTokens);
     // a bifolium or quire lists every value its pages have (sections, regimes, ...), separated by semicolons
     const many=r=>r.kind==='bifolium'||r.kind==='quire';
     const of=(r,f)=>many(r)?[...new Set(r.page.pages.flatMap(p=>[].concat(f(p)??[])).filter(v=>v!==''&&v!=null))].join('; '):[].concat(f(r.page)??[]).join(' ');
-    const rates=(m,r)=>[m,(100*m/r.totalTokens).toFixed(4),(1e4*m/r.totalTokens).toFixed(2),r.totalLines?(m/r.totalLines).toFixed(4):''];
-    return {name:`echo-${unit}-counts.csv`,rows:[['unit','folio','kind','section','regime','rz_language','currier','hands','sheet','populations','loci','words','lines','matches','percent','per_10k_words','per_line','pattern','merge_q',...(compare?['compare_matches','compare_percent','compare_per_10k_words','compare_per_line','compare_pattern']:[])],
+    // each pattern's rates over its own base (words and lines of its class)
+    const rates=(m,r)=>[m,r.totalTokens?(100*m/r.totalTokens).toFixed(4):'',r.totalTokens?(1e4*m/r.totalTokens).toFixed(2):'',r.totalLines?(m/r.totalLines).toFixed(4):''];
+    return {name:`echo-${unit}-counts.csv`,rows:[['unit','folio','kind','section','regime','rz_language','currier','hands','sheet','populations','loci','words','lines','matches','percent','per_10k_words','per_line','pattern','merge_q','rate_base',...(compare?['compare_matches','compare_percent','compare_per_10k_words','compare_per_line','compare_pattern','compare_words','compare_lines','compare_rate_base']:[])],
       ...keep.map(i=>{const r=all[i];return [P.unitName(r),r.kind==='quire'?`${r.page.pages[0].folio}–${r.page.last}`:r.kind==='bifolium'?r.page.pages.map(p=>p.folio).join('; '):r.page.folio,r.kind,of(r,p=>M.section_names[p.section]),of(r,p=>p.regime),of(r,p=>p.rz),of(r,p=>p.lang),of(r,p=>p.hands),of(r,p=>p.sheet),of(r,p=>p.populations),s.locus,r.totalTokens,r.totalLines,...rates(r.totalMatches,r),query,s.mergeQ,
-        ...(compare?[...rates(allC[i].totalMatches,r),compare.query]:[])];})]};
+        found0.base?.text||'all words',...(compare?[...rates(allC[i].totalMatches,allC[i]),compare.query,allC[i].totalTokens,allC[i].totalLines,found0.compare.base?.text||'all words']:[])];})]};
   }
   function act(action,b) {
     if(/^neighbor-(prev|next)-(back|next)$/.test(action)) {
@@ -878,11 +985,11 @@
     else if(action==='pc-export'){const t=pageChartTable();download(t.name,csv(t.rows),'text/csv');}
     else if(action==='pc-copy'){copyText(tsv(pageChartTable().rows),b.closest('.wb-menu')?.querySelector('.wb-menu-label'));}
     else if(action==='pt-compare'){ptCollect();patterns();}
-    else if(action==='pt-add'){ptCollect();const m=state.patterns;if(m.list.length<PT_MAX)m.list.push('');patterns();document.getElementById('pt-p'+(m.list.length-1))?.focus();}
-    else if(action==='pt-remove'){ptCollect();const m=state.patterns,i=+b.dataset.index;m.list.splice(i,1);m.pinned=m.pinned.filter(p=>p!==i).map(p=>p>i?p-1:p);patterns();}
+    else if(action==='pt-add'){ptCollect();const m=state.patterns;if(m.list.length<PT_MAX){m.list.push('');m.colours.length=m.list.length-1;m.colours.push('');}patterns();document.getElementById('pt-p'+(m.list.length-1))?.focus();}
+    else if(action==='pt-remove'){ptCollect();const m=state.patterns,i=+b.dataset.index;m.list.splice(i,1);m.colours.splice(i,1);m.pinned=m.pinned.filter(p=>p!==i).map(p=>p>i?p-1:p);patterns();}
     // swap two patterns (a column and its neighbour); pins follow their pattern, and the boxes and links take the new order
-    else if(action==='pt-move'){ptCollect();const m=state.patterns,a=+b.dataset.index,z=+b.dataset.to;[m.list[a],m.list[z]]=[m.list[z],m.list[a]];m.pinned=m.pinned.map(p=>p===a?z:p===z?a:p);patterns();const again=[...document.querySelectorAll(`[data-action="pt-move"][data-index="${z}"]`)];(again.find(x=>x.dataset.dir===b.dataset.dir&&!x.disabled)||again.find(x=>!x.disabled))?.focus();}
-    else if(action==='pt-pin'){ptCollect();const m=state.patterns,i=+b.dataset.index;m.pinned=m.pinned.includes(i)?m.pinned.filter(p=>p!==i):[...m.pinned,i].slice(-2);patterns();if(m.pinned.includes(i))document.getElementById('wb-patterns-chart')?.scrollIntoView({block:'nearest'});}
+    else if(action==='pt-move'){ptCollect();const m=state.patterns,a=+b.dataset.index,z=+b.dataset.to;[m.list[a],m.list[z]]=[m.list[z],m.list[a]];[m.colours[a],m.colours[z]]=[m.colours[z]||'',m.colours[a]||''];m.pinned=m.pinned.map(p=>p===a?z:p===z?a:p);patterns();const again=[...document.querySelectorAll(`[data-action="pt-move"][data-index="${z}"]`)];(again.find(x=>x.dataset.dir===b.dataset.dir&&!x.disabled)||again.find(x=>!x.disabled))?.focus();}
+    else if(action==='pt-pin'){ptCollect();const m=state.patterns,i=+b.dataset.index;m.pinned=m.pinned.includes(i)?m.pinned.filter(p=>p!==i):[...m.pinned,i];patterns();if(m.pinned.includes(i))document.getElementById('wb-patterns-chart')?.scrollIntoView({block:'nearest'});}
     else if(action==='pt-export'){const t=ptTable();download(t.name,csv(t.rows),'text/csv');}
     else if(action==='pt-copy'){copyText(tsv(ptTable().rows),b.closest('.wb-menu')?.querySelector('.wb-menu-label'));}
     else if(action==='neighbor-only'){
@@ -913,6 +1020,7 @@
       for(const side of ['prev','next']){const words=onlyWords(side);if(!words.length)continue;
         if(words.some(w=>/^\(|[?*|]/.test(w)))throw new Error(`The ${sideWord(side)}-word filter includes a line boundary, unreadable gap or pattern character, which a rule context cannot express. Remove it from the filter first.`);
         const keep=words.filter(C.pattern(s[side]));if(!keep.length)throw new Error(`No filtered ${sideWord(side)} word also matches the ${side==='prev'?'Previous':'Next'} word pattern.`);carried[side]=keep.join('|');}
+      if(isGolfPop(s.section)||isGolfPop(s.compare))throw new Error('The Rule lab compares Echo populations. Choose Echo populations under Search population and Compare with first.');
       state.lab.from=s.section;state.lab.to=s.compare;state.lab.rules.push({...defaults(),name:'Candidate from context search',from:literal,to:C.literalWord(s.compareQuery)||literal,fraction:0,...Object.fromEntries(contextKeys.map(k=>[k,s[k]])),...carried});state.result=null;save();go('lab');}
     else if(action==='rule-add'||action==='rule-known'){if(state.lab.rules.length>=30)throw new Error('Use at most 30 rules.');state.lab.rules.push({...defaults(),name:action==='rule-known'?'Catalog rule':'New candidate',kind:action==='rule-known'?'known':'exact',fraction:0});state.result=null;save();lab();}
     else if(action==='rule-remove'){state.lab.rules.splice(+b.dataset.index,1);state.result=null;save();lab();}
@@ -923,8 +1031,11 @@
   // Links (view_state.js): per tab, the settings that make the view, as [object, {link parameter: [field, reader]}].
   // Exclusions and neighbor filters are not part of a link.
   function linkGroups(tab) {
-    const R=window.EchoViewState.read,pops=populations.map(p=>p[0]),evals=Object.keys(W.residuals),text=v=>R.text(v),evalNo=v=>R.number(v,0,3);
+    const R=window.EchoViewState.read,pops=populations.map(p=>p[0]),searchPops=[...pops,...golfPops.map(p=>p[0])],evals=Object.keys(W.residuals),text=v=>R.text(v),evalNo=v=>R.number(v,0,3);
     const pick=(...allowed)=>v=>R.oneOf(v,allowed);
+    // Group by: Golf v2 replaced Golf regime ++, so its old links open on Golf v2
+    const pickGroup=(v,...more)=>R.oneOf(v==='regimeSplit2'?'golf2':v,['section','regime','regimeSplit','golf2','golf2x','golf21','golf21x','rz','currier','hand',...more]);
+    const pickOrder=pick('manuscript','bifolium',...PATH_ORDERS);
     if(tab==='residuals')return [[state,{res:['resMode',pick('saved','rules','fit')],eval:['evaluation',v=>R.oneOf(v,evals)],side:['side',pick('target','source')],rq:['query',text],
       route:['route',pick('all','no','yes')],bin:['bin',v=>R.text(v,40)],rfrom:['resFrom',v=>R.oneOf(v,pops)],rto:['resTo',v=>R.oneOf(v,pops)],rcls:['resCls',pick('all','O','B','M','N')],
       fitcmp:['fitCompare',v=>/^(e1|defaults|minus:[\w.]+)$/.test(v)?v:undefined],fiteval:['fitEval',evalNo]}]];
@@ -932,17 +1043,18 @@
       [state.distView,{dword:['word',v=>R.text(v,40)],dchanged:['changed',R.flag],dlabels:['labels',v=>{const x=R.oneOf(v,['0','12','30']);return x===undefined?undefined:+x;}],
         dmin:['min',v=>R.number(v,0,1e6)],dbasis:['basis',pick('either','both','source','target')]}]];
     if(tab==='contexts')return [
-      [state.search,{q:['query',text],cq:['compareQuery',text],pop:['section',v=>R.oneOf(v,pops)],cpop:['compare',v=>R.oneOf(v,pops)],mode:['mode',pick('glob','related')],
+      [state.search,{q:['query',text],cq:['compareQuery',text],pop:['section',v=>R.oneOf(v,searchPops)],cpop:['compare',v=>R.oneOf(v,searchPops)],mode:['mode',pick('glob','related')],
         locus:['locus',v=>R.oneOf(v,Object.keys(LOCI))],mergeq:['mergeQ',R.flag],prev2:['prev2',text],prev:['prev',text],next:['next',text],pos:['position',pick('any','start','end','interior')],
-        line:['lineClass',pick('any','first','body')],qf:['q',pick('any','yes','no')],nqf:['nextQ',pick('any','yes','no')],folio:['folio',v=>R.text(v,20)],sheet:['sheet',v=>R.text(v,20)]}],
-      [state.pageChart,{group:['group',pick('section','regime','regimeSplit','regimeSplit2','rz','currier','hand','comparison')],unit:['unit',pick('page','paragraph','bifolium','quire')],chart:['layout',pick('combined','split','histogram')],
-        show:['measure',pick('count','percent','per10k','perline')],order:['ordering',pick('manuscript','bifolium')],pattern:['pattern',pick('search','compare','both')],
+        line:['lineClass',pick(...LINE_CLASS_OPTIONS.map(o=>o[0]))],qf:['q',pick('any','yes','no')],nqf:['nextQ',pick('any','yes','no')],folio:['folio',v=>R.text(v,20)],sheet:['sheet',v=>R.text(v,20)],over:['rates',pick('class','all')]}],
+      [state.pageChart,{group:['group',v=>pickGroup(v,'comparison')],unit:['unit',pick('page','paragraph','bifolium','quire')],chart:['layout',pick('combined','split','histogram')],
+        show:['measure',pick('count','percent','per10k','perline')],order:['ordering',pickOrder],pattern:['pattern',pick('search','compare','both')],
         bins:['bins',pick('auto','6','12','24','48')],range:['range',pick('clip','full')],zeros:['zeros',pick('show','hide')]}],
       [state,{neighbors:['neighborMode',pick('edges','gallows','word')],rates:['percentMode',pick('baseline','conditional','section')],signals:['signalFilter',pick('all','any','section','selection','shared','both')]}]];
     if(tab==='patterns')return [[state.patterns,{locus:['locus',v=>R.oneOf(v,Object.keys(LOCI))],mergeq:['mergeQ',R.flag],prev2:['prev2',text],prev:['prev',text],next:['next',text],
-      pos:['position',pick('any','start','end','interior')],line:['lineClass',pick('any','first','body')],qf:['q',pick('any','yes','no')],nqf:['nextQ',pick('any','yes','no')],
-      group:['group',pick('section','regime','regimeSplit','regimeSplit2','rz','currier','hand')],show:['measure',pick('count','percent','per10k','perline')],unit:['unit',pick('page','paragraph','bifolium','quire')],
-      chart:['layout',pick('combined','split','histogram')],order:['ordering',pick('manuscript','bifolium')],bins:['bins',pick('auto','6','12','24','48')],range:['range',pick('clip','full')],zeros:['zeros',pick('show','hide')],bars:['barScale',pick('table','column')]}]];
+      pos:['position',pick('any','start','end','interior')],line:['lineClass',pick(...LINE_CLASS_OPTIONS.map(o=>o[0]))],qf:['q',pick('any','yes','no')],nqf:['nextQ',pick('any','yes','no')],
+      group:['group',v=>pickGroup(v)],show:['measure',pick('count','percent','per10k','perline')],unit:['unit',pick('page','paragraph','bifolium','quire')],
+      chart:['layout',pick('combined','split','histogram')],order:['ordering',pickOrder],bins:['bins',pick('auto','6','12','24','48')],range:['range',pick('clip','full')],zeros:['zeros',pick('show','hide')],bars:['barScale',pick('table','column','row')],over:['rates',pick('class','all')],
+      arrange:['arrange',pick('mirror','stack','stack100','rows')],yscale:['yscale',pick('shared','own')]}]];
     return [];
   }
   // Pattern boxes show their reading as you type
