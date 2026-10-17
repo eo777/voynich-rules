@@ -55,6 +55,8 @@
   // 'schedule: full and partial forward; partial at most half', 'schedule: full, forward and reverse'
   const degreeWords = routes => { const ds = [...new Set(routes.map(r => (Math.abs(r.degree) >= 1 ? 'full' : 'partial')))].sort(), dirs = [...new Set(routes.map(r => (r.degree < 0 ? 'reverse' : 'forward')))].sort(); const mixed = ds.length > 1 || dirs.length > 1; return `schedule: ${ds.join(' and ')}${dirs.length > 1 ? ', ' : ' '}${dirs.join(' and ')}${ds.includes('partial') ? (mixed ? '; partial at most half' : ', at most half') : ''}`; };
   const colourOf = i => `var(--ser-${root.EchoPageChart.AUTO_COLOURS[i % root.EchoPageChart.AUTO_COLOURS.length]})`;
+  // a colour's family in that palette (blue, blue-deep and blue-light are one): a ribbon pulled out by a click avoids its neighbours' family
+  const colourFamily = i => root.EchoPageChart.AUTO_COLOURS[i % root.EchoPageChart.AUTO_COLOURS.length].replace(/-(deep|light)$/, '');
 
   function columns(axis = state.axis) {
     const key = axis + '|' + state.order + '|' + state.mergeQ + '|' + state.middle;
@@ -130,19 +132,20 @@
     const {own, L: L0} = !groups ? {own: [], L: CF.ledgers(cols, words, [])} : fam && bandMode ? fam : groupLedgers(cols, words, sched, p0);
     // the ribbons: one per spelling, per ending or front class of the saved split, or per glyph bigram (the ledger read as bigrams)
     const Lb = by === 'bigram' ? CF.bigramLedgers(L0, words, {units}) : null;
-    // a selected ribbon pulls its partners out of the pooled band: every key a route links to it gets a band of its own
-    let pin = [];
+    // a selected ribbon pulls its partners out of the pooled band: every key a route links to it gets a band of its own,
+    // inserted into the stack without moving or repainting the others (CF.stackOrder, CF.series' extra bands)
+    let extra = [];
     if (anySel()) {
-      if (by === 'bigram') pin = [...new Set(Lb.flatMap(s => s.routes.filter(r => isSel(r.from) !== isSel(r.to)).map(r => (isSel(r.from) ? r.to : r.from))))];
-      else { const keyOf = w => CF.classKey(w, by, splits), mem = w => isSel(keyOf(w)); pin = [...new Set(L0.flatMap(s => s.routes.filter(r => mem(r.from) !== mem(r.to)).map(r => keyOf(mem(r.from) ? r.to : r.from))))].filter(k => !greySet.has(k)); }
+      if (by === 'bigram') extra = [...new Set(Lb.flatMap(s => s.routes.filter(r => isSel(r.from) !== isSel(r.to)).map(r => (isSel(r.from) ? r.to : r.from))))];
+      else { const keyOf = w => CF.classKey(w, by, splits), mem = w => isSel(keyOf(w)); extra = [...new Set(L0.flatMap(s => s.routes.filter(r => mem(r.from) !== mem(r.to)).map(r => keyOf(mem(r.from) ? r.to : r.from))))].filter(k => !greySet.has(k)); }
     }
     // the typed word keeps a ribbon of its own however small: "Shown" pools only the other spellings (or classes)
     const seedLabel = m.seed && by !== 'bigram' ? CF.classKey(m.seed, by, splits) : null;
-    if (seedLabel && bandMode && kept.includes(m.seed)) pin = pin.concat([seedLabel]);
+    const pin = seedLabel && bandMode && kept.includes(m.seed) ? [seedLabel] : [];
     const removedBand = bandMode && grey.length ? {words: grey, label: groups && outside.length ? CF.REST_LABEL : CF.REMOVED_LABEL, ...CF.removedFlows(L0, cols.columns.length, greySet)} : null;
     const L = by === 'bigram' ? Lb : L0;
-    const S0 = by === 'bigram' ? CF.bigramSeries(cols, kept, {units, cap: state.bands, pin}) : CF.series(cols, kept, {cap: state.bands, by, splits, pin, removed: removedBand});
-    const S = by === 'rule' || !CF.isGroups(state.axis) ? S0 : CF.stackOrder(S0, L, state.stack);    // the stacking order: fewest crossings, or by mass
+    const S0 = by === 'bigram' ? CF.bigramSeries(cols, kept, {units, cap: state.bands, extra}) : CF.series(cols, kept, {cap: state.bands, by, splits, pin, extra, removed: removedBand});
+    const S = by === 'rule' || !CF.isGroups(state.axis) ? S0 : CF.stackOrder(S0, L, state.stack, {family: colourFamily});    // the stacking order: fewest crossings, or by mass
     const RS = by === 'rule' ? CF.ruleSeries(L, {cap: state.bands}) : null;
     const touching = new Set(own.flatMap(pr => (pr[3] || []).flatMap(code => code.split('+').map(c => c.split('.')[0]).concat(code.includes(' (via ') ? [code.split(' (via ')[0]] : []))));
     return {cols, full, hidden, m, words: kept, removed, outside, S, L, L0, RS, sched, touching, seedLabel, by, scope, p0};
@@ -268,7 +271,8 @@
     // then the segments on top; flows thinner than a pixel at both ends are left out
     const grads = new Map();
     // the removed words' band is grey: its flows fade to grey, its segments are hatched
-    const colourB = i => (lay.bands[i] && lay.bands[i].removed ? 'var(--muted)' : colourOf(i)), fillB = i => (lay.bands[i] && lay.bands[i].removed ? 'url(#ch-hatch-band)' : colourOf(i));
+    const hueOf = i => (lay.bands[i] && lay.bands[i].hue != null ? lay.bands[i].hue : i);      // a band's colour is fixed by the series, not by its place in the stack
+    const colourB = i => (lay.bands[i] && lay.bands[i].removed ? 'var(--muted)' : colourOf(hueOf(i))), fillB = i => (lay.bands[i] && lay.bands[i].removed ? 'url(#ch-hatch-band)' : colourOf(hueOf(i)));
     const gradient = (from, to) => { const id = `ch-g-${from}-${to}`; if (!grads.has(id)) grads.set(id, `<linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="${colourB(from)}"></stop><stop offset="1" stop-color="${colourB(to)}"></stop></linearGradient>`); return `url(#${id})`; };
     const visible = f => Math.max(f.mass * lay.scales[stepI(f)], f.mass * lay.scales[stepJ(f)]) >= 0.8;
     const between = s => `${K[stepI(s)].key} → ${K[stepJ(s)].key}`;
@@ -296,7 +300,7 @@
     const seedOf = label => (x.seedLabel && label === x.seedLabel ? 'ch-seed' : '');      // the word typed: its names in bold
     const valueOf = s => (state.measure === 'share' ? pct(s.share) : s.rate >= 10 ? Math.round(s.rate).toLocaleString('en-US') : s.rate.toFixed(1));
     if (state.skips) for (const sk of lay.skips) { const gap = betweenOf(sk.from, sk.to), names = gap.map(i => K[i].key).join(' and '), next = gap.length ? gap[0] : sk.to, prev = gap.length ? gap[gap.length - 1] : sk.from, outStep = (x.L || []).find(s => stepI(s) === sk.from && stepJ(s) === next); parts.push(`<path class="ch-skip ${isSel(lay.bands[sk.band].label) ? 'on' : ''} ${outStep ? dimStep(sk.band, outStep.step) : ''}" data-band="${sk.band}" d="${sk.path}" transform="translate(0,${top})"><title>${esc(`${lay.bands[sk.band].label}: in ${K[sk.from].key}, absent in ${names}, returns in ${K[sk.to].key}; ${num1(sk.parked)} per 10k, the lower of its rates in ${K[sk.from].key} and ${K[sk.to].key}, is parked across ${names}: not lost at ${K[sk.from].key} → ${K[next].key}, not gained at ${K[prev].key} → ${K[sk.to].key}`)}</title></path>`); }
-    for (const r of lay.ribbons) parts.push(`<path class="ch-ribbon ${isSel(lay.bands[r.band].label) ? 'on' : ''} ${dimStep(r.band, r.step)}" data-band="${r.band}" data-step="${r.step}" d="${r.path}" transform="translate(0,${top})" fill="${colourOf(r.band)}"><title>${esc(`${lay.bands[r.band].label}: ${num1(r.kept)} per 10k kept from ${between(r)}`)}</title></path>`);
+    for (const r of lay.ribbons) parts.push(`<path class="ch-ribbon ${isSel(lay.bands[r.band].label) ? 'on' : ''} ${dimStep(r.band, r.step)}" data-band="${r.band}" data-step="${r.step}" d="${r.path}" transform="translate(0,${top})" fill="${colourOf(hueOf(r.band))}"><title>${esc(`${lay.bands[r.band].label}: ${num1(r.kept)} per 10k kept from ${between(r)}`)}</title></path>`);
     if (state.flows) for (const f of lay.flows.filter(visible)) parts.push(`<path class="ch-flow ${dimFlow(f)}" data-step="${f.step}" data-from="${f.from}" data-to="${f.to}" d="${f.path}" transform="translate(0,${top})" fill="${gradient(f.from, f.to)}"><title>${esc(`${x.by === 'bigram' ? 'Bigram flow' : 'Rule flow'} ${lay.bands[f.from].label} → ${lay.bands[f.to].label}: ${num1(f.mass)} per 10k${f.massTo != null && Math.abs(f.massTo - f.mass) > 0.05 ? ` at its source end, ${num1(f.massTo)} at its target end` : ''}, matched at ${between(f)} along ${[...new Set(f.routes.flatMap(r => r.rules))].join(', ') || 'a rule'}${x.sched ? ` (${degreeWords(f.routes)})` : ''}${x.by === 'bigram' ? ` via ${[...new Set(f.routes.flatMap(r => r.vias || []))].slice(0, 3).join(', ')}` : ''}. A capacity bound, not a history.`)}</title></path>`);
     // transit flows: the part of a 2a → 3a rule flow that had left its input by the middle text without reaching its output, drawn through an estimated anchor
     const visiblePass = f => Math.max(f.mass * lay.scales[f.i != null ? f.i : f.step], f.mass * lay.scales[f.j != null ? f.j : f.step2 + 1]) >= 0.8;
@@ -315,7 +319,7 @@
       const shown = [...lay.flows.filter(visible), ...(lay.pass || []).filter(visiblePass)];
       place(shown.filter(f => selSet.has(f.from) || kinOut.includes(f)), 'to'); place(shown.filter(f => !selSet.has(f.from) && (selSet.has(f.to) || kinIn.includes(f))), 'from');
     }
-    for (const s of lay.stubs.filter(s => !K[stepI(s)].sparse && !K[stepJ(s)].sparse)) parts.push(`<path class="ch-stub ch-${s.kind} ${dimStep(s.band, s.step)}" d="${s.path}" transform="translate(0,${top})" fill="${colourOf(s.band)}"><title>${esc(`${lay.bands[s.band].label}: ${num1(s.mass)} per 10k ${groupsAxis ? (s.kind === 'unplaced' ? 'lost' : 'gained') + ' without a rule route' : s.kind === 'unplaced' ? 'fall' : 'rise'} at ${between(s)}`)}</title></path>`);
+    for (const s of lay.stubs.filter(s => !K[stepI(s)].sparse && !K[stepJ(s)].sparse)) parts.push(`<path class="ch-stub ch-${s.kind} ${dimStep(s.band, s.step)}" d="${s.path}" transform="translate(0,${top})" fill="${colourOf(hueOf(s.band))}"><title>${esc(`${lay.bands[s.band].label}: ${num1(s.mass)} per 10k ${groupsAxis ? (s.kind === 'unplaced' ? 'lost' : 'gained') + ' without a rule route' : s.kind === 'unplaced' ? 'fall' : 'rise'} at ${between(s)}`)}</title></path>`);
     // the segments, and under the fork the mirror of the fork column at the head of the lower arm (the same text, drawn again)
     const segTitle = (b, s, c) => { if (b.removed) return `${b.label} (${b.words.length}) in ${c.key}: ${num1(s.inflow || 0)} per 10k flows into them at the step in, ${num1(s.outflow || 0)} out of them at the step out; their own mass is not drawn`; const pairNote = x.by === 'bigram' && b.pair ? ` (units ${b.pair.join(' + ')})` : ''; return `${b.label}${pairNote} in ${c.key}: ${num(s.n)} ${x.by === 'bigram' ? 'bigram tokens among' : 'of'} ${num(c.N)} words, ${num1(s.rate)} per 10k, ${pct(s.share)} of the set${c.sparse ? ' (the set has fewer than 20 tokens here)' : ''}`; };
     lay.bands.forEach((b, bi) => b.segments.forEach((s, i) => {
@@ -552,7 +556,7 @@
   }
   function familyTable(x) {
     const S = x.S, bands = [...S.bands, ...(S.other ? [S.other] : []), ...(S.removed ? [S.removed] : [])];
-    return `<table class="wb-table ch-table"><thead><tr><th>${cap1(UNIT_NOUN[x.by])}</th><th>Tokens</th><th>Summed rate</th></tr></thead><tbody>${bands.map((b, i) => `<tr class="ch-row" data-band="${i}"><td><i class="ch-dot" style="background:${colourOf(i)}"></i>${esc(b.label)}</td><td>${num(b.values.reduce((v, r) => v + r.n, 0))}</td><td>${num1(b.mass)}</td></tr>`).join('')}</tbody></table><p class="wb-small">Tokens: in all columns. Summed rate: the spelling’s rates per 10k added over the columns. Ribbons are stacked in this order.</p>`;
+    return `<table class="wb-table ch-table"><thead><tr><th>${cap1(UNIT_NOUN[x.by])}</th><th>Tokens</th><th>Summed rate</th></tr></thead><tbody>${bands.map((b, i) => `<tr class="ch-row" data-band="${i}"><td><i class="ch-dot" style="background:${colourOf(b.hue != null ? b.hue : i)}"></i>${esc(b.label)}</td><td>${num(b.values.reduce((v, r) => v + r.n, 0))}</td><td>${num1(b.mass)}</td></tr>`).join('')}</tbody></table><p class="wb-small">Tokens: in all columns. Summed rate: the spelling’s rates per 10k added over the columns. Ribbons are stacked in this order.</p>`;
   }
   // under the Lineage scope the spelling, ending and front charts read the whole rule family's ledgers
   const familyLedger = x => !!(x.outside && x.outside.length && x.by !== 'bigram' && x.by !== 'rule');

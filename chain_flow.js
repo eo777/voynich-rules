@@ -259,6 +259,16 @@
     if (!s) return '(no split: ' + w + ')';
     return by === 'front' ? (s[0] || '∅') : (w.slice(s[0].length) || '∅');
   }
+  // The bands drawn: the cap largest entries, then the pinned ones in the order given (the word typed), then the extra
+  // ones in mass order (a selection's partners pulled out of the pooled band, marked `extra` for stackOrder, which
+  // stacks and colours the chart without them).
+  function pick(entries, cap, pin = [], extra = []) {
+    const top = entries.length > cap ? entries.slice(0, cap) : entries, seen = new Set(top.map(e => e.key)), byKey = new Map(entries.map(e => [e.key, e]));
+    const out = top.map(e => ({e, extra: false})), extraSet = new Set(extra || []);
+    for (const k of pin || []) if (byKey.has(k) && !seen.has(k)) { seen.add(k); out.push({e: byKey.get(k), extra: false}); }
+    for (const e of entries) if (extraSet.has(e.key) && !seen.has(e.key)) { seen.add(e.key); out.push({e, extra: true}); }
+    return {kept: out, rest: entries.filter(e => !seen.has(e.key))};
+  }
   const OTHER_LABEL = {spelling: 'other members', tail: 'other endings', front: 'other fronts', bigram: 'other bigrams'};
   const columnsMeta = K => K.map((c, i) => ({key: c.key, label: c.label, title: c.title, group: c.group, rank: c.rank, position: c.position, span: c.span || null, N: c.N, pages: c.pages ? c.pages.size : 0, slot: c.slot != null ? c.slot : i, row: c.row || 0}));
   // what a series carries of its column set's shape: the steps, the paths and the fork, for the layout
@@ -269,7 +279,7 @@
   // the `cap` largest by summed rate (ties alphabetical), the rest pooled as one band so the family total is conserved.
   // `removed` ({words, inflow, outflow} from removedFlows, and an optional label) adds the "removed words" band after the
   // pooled one: its value in a column is the larger of what it receives there and what it sends from there, so both faces fit inside it.
-  function series(cols, words, {cap = 12, by = 'spelling', splits = null, pin = [], removed = null} = {}) {
+  function series(cols, words, {cap = 12, by = 'spelling', splits = null, pin = [], extra = [], removed = null} = {}) {
     const K = cols.columns, list = [...words];
     const rate = (n, c) => (c.N ? n / c.N * PER : 0);
     const totals = K.map(c => { let n = 0; for (const w of list) n += c.counts.get(w) || 0; return {N: c.N, n, rate: rate(n, c)}; });
@@ -278,11 +288,10 @@
     const classes = new Map();
     for (const w of sorted) { const k = classKey(w, by, splits); if (!classes.has(k)) classes.set(k, []); classes.get(k).push(w); }
     const entries = [...classes.entries()].map(([key, ws]) => ({key, words: ws, mass: ws.reduce((v, w) => v + mass.get(w), 0)})).sort((a, b) => b.mass - a.mass || order(a.key, b.key));
-    // the cap largest classes, plus any pinned class (a selection's partners pulled out of the pooled band)
-    const pinSet = new Set(pin || []), top = entries.length > cap ? entries.slice(0, cap) : entries;
-    const kept = top.concat(entries.slice(top.length).filter(e => pinSet.has(e.key))), keptKeys = new Set(kept.map(e => e.key)), rest = entries.filter(e => !keptKeys.has(e.key));
+    // the cap largest classes, plus the pinned class (the word typed) and the extra ones (a selection's partners)
+    const {kept, rest} = pick(entries, cap, pin, extra);
     const values = ws => K.map((c, i) => { let n = 0; for (const w of ws) n += c.counts.get(w) || 0; return {n, rate: rate(n, c), share: totals[i].n ? n / totals[i].n : 0}; });
-    const bands = kept.map(e => ({word: by === 'spelling' ? e.key : null, label: e.key, kind: by, words: e.words, values: values(e.words), mass: e.mass}));
+    const bands = kept.map(({e, extra: x}) => ({word: by === 'spelling' ? e.key : null, label: e.key, kind: by, words: e.words, values: values(e.words), mass: e.mass, ...(x ? {extra: true} : {})}));
     const restWords = rest.flatMap(e => e.words);
     const other = rest.length ? {word: null, label: OTHER_LABEL[by] || 'other', kind: by, pooled: true, classes: rest.length, words: restWords, values: values(restWords), mass: rest.reduce((v, e) => v + e.mass, 0)} : null;
     let removedBand = null;
@@ -297,8 +306,33 @@
   // crossings they would be drawn with fall. The count follows the layout: a flow crosses the kept ribbon of every band
   // stacked between its two ends, and two flows cross when their ends are in opposite order; each crossing weighs the
   // thinner of the two ribbons, so hairlines count little. The pooled band and the removed words stay last; the
-  // bands' values and pooling are unchanged, only their order. Bigram series are ordered the same way.
-  function stackOrder(S, L, mode = 'cross') {
+  // bands' values and pooling are unchanged, only their order. Bigram series are ordered the same way. The `extra`
+  // bands (a selection's partners) do not move the others: the rest are stacked as they are without them, and each
+  // extra band is then inserted at the place where the crossings are fewest, so a click never reorders the chart.
+  // Each band's colour (`hue`) is its place in the stack without the extra bands and the pooled band the next one, so a
+  // click that pulls partners out repaints nothing already drawn; each extra band takes the next unused colour whose
+  // `family` (the view's palette: blue, blue-deep and blue-light are one family) differs from those of its neighbours in
+  // the stack and of the bands it exchanges flows with (the ribbon clicked among them), or else the next unused colour.
+  function stackOrder(S, L, mode = 'cross', {family = h => h} = {}) {
+    const T = stackBands(S, L, mode), base = T.bands.filter(b => !b.extra), hue = new Map(base.map((b, i) => [b, i]));
+    const used = new Set([...hue.values(), base.length]), last = T.bands.length - 1, bandOf = new Map(), partners = new Map();
+    T.bands.forEach(b => b.words.forEach(w => bandOf.set(w, b)));
+    for (const step of L || []) for (const rt of step.routes || []) {
+      const f = bandOf.get(rt.from), t = bandOf.get(rt.to); if (!f || !t || f === t) continue;
+      for (const [x, y] of [[f, t], [t, f]]) if (x.extra) { if (!partners.has(x)) partners.set(x, new Set()); partners.get(x).add(y); }
+    }
+    T.bands.forEach((b, i) => {
+      if (!b.extra) return;
+      const others = [i > 0 ? T.bands[i - 1] : null, i < last ? T.bands[i + 1] : null, ...(partners.get(b) || [])];
+      const near = new Set(others.map(x => (x ? hue.get(x) : null)).concat(i === last && T.other ? [base.length] : []).filter(h => h != null).map(family));
+      const free = h => !used.has(h);
+      let h = base.length + 1, tries = 0; while ((!free(h) || near.has(family(h))) && tries++ < 64) h++;
+      if (!free(h) || near.has(family(h))) { h = base.length + 1; while (!free(h)) h++; }
+      hue.set(b, h); used.add(h);
+    });
+    return {...T, bands: T.bands.map(b => ({...b, hue: hue.get(b)})), other: T.other ? {...T.other, hue: base.length} : T.other};
+  }
+  function stackBands(S, L, mode) {
     const bands = S.bands, n = bands.length;
     if (mode !== 'cross' || n < 3 || !L || !L.length) return {...S, stack: 'mass'};
     const bandOf = new Map(); bands.forEach((b, bi) => b.words.forEach(w => bandOf.set(w, bi)));
@@ -323,6 +357,16 @@
     };
     let order = bands.map((b, i) => i);
     const posOf = ord => { const p = new Array(n); ord.forEach((bi, rank) => { p[bi] = rank; }); return p; };
+    if (bands.some(b => b.extra)) {
+      const base = stackBands({...S, bands: bands.filter(b => !b.extra)}, L, mode).bands;
+      order = base.map(b => bands.indexOf(b));
+      for (const e of bands.map((b, i) => i).filter(i => bands[i].extra)) {
+        let at = order.length, least = Infinity;
+        for (let k = 0; k <= order.length; k++) { const c = cost(posOf([...order.slice(0, k), e, ...order.slice(k)])); if (c < least - 1e-9) { least = c; at = k; } }
+        order.splice(at, 0, e);
+      }
+      return {...S, bands: order.map(bi => bands[bi]), stack: 'cross', crossingCost: cost(posOf(order))};
+    }
     let best = cost(posOf(order)), improved = true, passes = 0;
     // pairwise swaps, then moving one band to another place, until neither helps
     while (improved && passes++ < 12) {
@@ -359,7 +403,7 @@
   // Ribbons as glyph bigrams: a spelling counts once for each bigram it contains (twice when it contains it twice),
   // weighted by its count; rate per 10k words of the column, share of the set's bigram tokens there. Sparse columns
   // are read from the set's spelling tokens as elsewhere.
-  function bigramSeries(cols, words, {units = {}, cap = 12, pin = []} = {}) {
+  function bigramSeries(cols, words, {units = {}, cap = 12, pin = [], extra = []} = {}) {
     const K = cols.columns, list = [...words];
     const rate = (n, c) => (c.N ? n / c.N * PER : 0);
     const per = K.map(c => { const m = new Map(); for (const w of list) { const n = c.counts.get(w) || 0; if (!n) continue; for (const [b, k] of bigramCounts(w, units)) m.set(b, (m.get(b) || 0) + n * k); } return m; });
@@ -368,11 +412,10 @@
     const all = [...new Set(per.flatMap(m => [...m.keys()]))];
     const mass = new Map(all.map(b => [b, K.reduce((v, c, i) => v + rate(per[i].get(b) || 0, c), 0)]));
     const sorted = all.sort((a, b) => mass.get(b) - mass.get(a) || order(a, b));
-    const pinSet = new Set(pin || []), top = sorted.length > cap ? sorted.slice(0, cap) : sorted;
-    const kept = top.concat(sorted.slice(top.length).filter(b => pinSet.has(b))), keptSet = new Set(kept), rest = sorted.filter(b => !keptSet.has(b));
+    const picked = pick(sorted.map(b => ({key: b})), cap, pin, extra), kept = picked.kept, rest = picked.rest.map(e => e.key);
     const values = bs => K.map((c, i) => { let n = 0; for (const b of bs) n += per[i].get(b) || 0; return {n, rate: rate(n, c), share: totals[i].n ? n / totals[i].n : 0}; });
     const pairs = bigramUnits(list, units);
-    const bands = kept.map(b => ({word: null, label: b, kind: 'bigram', pair: pairs.get(b) || null, words: [b], values: values([b]), mass: mass.get(b)}));
+    const bands = kept.map(({e: {key: b}, extra: x}) => ({word: null, label: b, kind: 'bigram', pair: pairs.get(b) || null, words: [b], values: values([b]), mass: mass.get(b), ...(x ? {extra: true} : {})}));
     const other = rest.length ? {word: null, label: OTHER_LABEL.bigram, kind: 'bigram', pooled: true, classes: rest.length, words: rest, values: values(rest), mass: rest.reduce((v, b) => v + mass.get(b), 0)} : null;
     return {axis: cols.axis, mergeQ: cols.mergeQ, order: cols.order, by: 'bigram', columns: columnsMeta(K), ...shapeOf(cols), bands, other, totals, sparse: wordTokens.map(n => n < SPARSE), words: sorted, cap};
   }
@@ -887,7 +930,7 @@
     let scales;
     if (measure === 'share' || fill) scales = K.map((c, i) => (total(i) > 0 ? (height - GAP * (count(i) - 1)) / total(i) : 0));
     else { let s = Infinity; K.forEach((c, i) => { if (total(i) > 0) s = Math.min(s, (height - GAP * (count(i) - 1)) / total(i)); }); scales = K.map(() => (Number.isFinite(s) ? s : 0)); }
-    const out = bands.map((b, index) => ({index, label: b.label, word: b.word, words: b.words, kind: b.kind || 'spelling', pooled: !!b.pooled, removed: !!b.removed, pair: b.pair || null, segments: K.map(() => null), mirrors: {}}));
+    const out = bands.map((b, index) => ({index, hue: b.hue != null ? b.hue : index, label: b.label, word: b.word, words: b.words, kind: b.kind || 'spelling', pooled: !!b.pooled, removed: !!b.removed, pair: b.pair || null, segments: K.map(() => null), mirrors: {}}));
     K.forEach((c, i) => {
       let y = padTop + rowY(rowOf[i]);
       bands.forEach((b, bi) => {
