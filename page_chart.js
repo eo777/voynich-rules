@@ -37,10 +37,14 @@
     '3a': ['HB'], '3b': ['HB', 'hatch'], '3c': ['Stars'], '3d-c': [HB_OTHER_COLOUR], '3d-l': [HB_OTHER_COLOUR, 'hatch'],
     '4a': ['Bio'], '4b': ['Bio', 'hatch'], '4c': ['Stars', 'hatch'], '5a': ['Cel'], '5b': ['Cel', 'hatch'], '5c': ['Cel', 'dots'], '6': ['f58']};
   const INTERMEDIATE_COLOUR = '--ink';
-  // Golf v2.1 (Golf 2.1, 10 October 2026; manuscript.golf21) paints Golf 2.1's codes the same way: 1.5a (Transitional
-  // A) takes late Herbal A's colour and 2a (Late A / Pharma, Golf 2.0's 2a and 2b merged) the joint regime's; the other
-  // codes keep Golf v2's paints, so the seventeen classes stay apart as they are in Golf v2.
-  const GOLF21_PAINTS = Object.fromEntries(Object.entries({...GOLF2_PAINTS, '1.5a': [LATE_A_COLOUR], '2a': ['lateAP']}).filter(([code]) => code !== '2b'));
+  // Golf v2.1 (Golf 2.1, 10 October 2026; manuscript.golf21) paints each class in Golf's own colour, the one Golf's
+  // Clusters app shows (the export's profile colours, copied with the classes by build_manuscript.py), at the user's
+  // request on 16 October 2026: theme.css --g21-<code>, a dot in the code written _ (1.5a: --g21-1_5a). The light theme
+  // has Golf's colours as they are; the dark theme lifts the lightness of the four below 3:1 on its surface (3b, 3c and
+  // 3d-c to 3:1, by OKLab dE x100 <= 1.5; 6, the darkest, to 3.5:1, by 15.3, to stay clear of the grey), hue kept. As a categorical set they are Golf's, not checked like the app's
+  // (1.5a and 2a dE 10.4 normal; 5a and 4c 5.9 deutan): the groups' codes name them under the bars and in the key. An
+  // intermediate candidate's group is striped in the colours of the two classes of its boundary, as in Clusters.
+  const golf21Colour = code => '--g21-' + String(code).replace(/\./g, '_');
   // Orders along Golf's proposed path (manuscript.golf_path): pages by their own positions ('path', 'pathPos') or by
   // their sheet's pooled position with the sheet's pages together ('pathBif', 'pathBifPos'); evenly spaced in that
   // order (rank), or at the positions themselves (Pos), so the path's empty stretches stay empty.
@@ -122,15 +126,17 @@
       // Golf v2.1 does the same with Golf 2.1's working membership; its extended view groups the 27 candidates by the
       // two classes of the boundary each sits on (3a/3b). With `opts.lines` (the text in view) only the groups with
       // words there are listed, so the label classes stay out of a view of running text.
-      const v21 = mode === 'golf21' || mode === 'golf21x', G = v21 ? manuscript.golf21 : manuscript.golf2, PAINTS = v21 ? GOLF21_PAINTS : GOLF2_PAINTS;
+      const v21 = mode === 'golf21' || mode === 'golf21x', G = v21 ? manuscript.golf21 : manuscript.golf2;
       if (!G) throw new Error(v21 ? 'Golf v2.1 needs manuscript_data.js with Golf 2.1 classes; run build_manuscript.py' : 'Golf v2 needs manuscript_data.js with Golf 2.0 classes; run build_manuscript.py');
       const order = manuscript.regimes.map(r => r.key), colours = opts.regimeColours || [];
-      const paintOf = code => { const [c, texture] = PAINTS[code] || [OTHER]; return {colour: c.startsWith('--') ? c : colours[order.indexOf(c)] || OTHER, ...(texture ? {[texture]: true} : {})}; };
+      const paintOf = code => { if (v21) return {colour: golf21Colour(code)};
+        const [c, texture] = GOLF2_PAINTS[code] || [OTHER]; return {colour: c.startsWith('--') ? c : colours[order.indexOf(c)] || OTHER, ...(texture ? {[texture]: true} : {})}; };
+      const candidatePaint = x => v21 ? {colour: golf21Colour(x.ends[0]), stripe: golf21Colour(x.ends[1])} : {colour: INTERMEDIATE_COLOUR};
       const unit = line => line.folio + '|' + category(line);
       const extended = mode === 'golf2x' || mode === 'golf21x', keyOf = line => (extended && G.intermediate[unit(line)]) || G.units[unit(line)] || 'none';
       const present = opts.lines ? new Set(opts.lines.filter(l => readable(l)).map(keyOf)) : null, has = k => !present || present.has(k);
       const groups = [...G.classes.filter(c => has(c.code)).map(c => ({key: c.code, label: `${c.code}: ${c.label.replace(': ', ', ')}`, members: [c.code], ...paintOf(c.code)})),
-        ...(extended ? G.intermediate_codes : []).filter(x => has(x.code)).map(x => ({key: x.code, label: `${x.code}: candidate between ${x.ends[0]} and ${x.ends[1]}`, members: [x.code], colour: INTERMEDIATE_COLOUR}))];
+        ...(extended ? G.intermediate_codes : []).filter(x => has(x.code)).map(x => ({key: x.code, label: `${x.code}: candidate between ${x.ends[0]} and ${x.ends[1]}`, members: [x.code], ...candidatePaint(x)}))];
       if (has('none')) groups.push({key: 'none', label: 'No working class', colour: OTHER, members: ['none']});
       return {mode, groups, keyOf};
     }
@@ -395,7 +401,7 @@
         per10k: tokens ? 1e4 * matches / tokens : null, perLine: lines ? matches / lines : null,
         share: totalMatches ? matches / totalMatches : null, median: med != null && measure === 'per10k' ? 1e4 * med : med, best};
     };
-    const out = group.groups.map(g => ({...summarize(g.key, g.label, g.members), colour: g.colour, hatch: g.hatch, dots: g.dots, members: g.members, role: g.role}));
+    const out = group.groups.map(g => ({...summarize(g.key, g.label, g.members), colour: g.colour, hatch: g.hatch, dots: g.dots, stripe: g.stripe, members: g.members, role: g.role}));
     const all = [...new Set(group.groups.flatMap(g => g.members).concat(group.both ? ['both'] : []))];
     return {rows: out, total: summarize('total', group.totalLabel || 'Whole manuscript', all), totalMatches};
   }
@@ -469,7 +475,7 @@
       for (const r of units) { const t = sum(g.members, r.tokens); if (t) values.push(measureOf(measure, sum(g.members, r.matches), t, sum(g.members, r.lines))); }
       return values;
     };
-    const series = group.groups.map(g => ({key: g.key, label: g.label, colour: g.colour, hatch: g.hatch, dots: g.dots, values: valuesOf(rows, g), valuesC: compare ? valuesOf(compare, g) : null,
+    const series = group.groups.map(g => ({key: g.key, label: g.label, colour: g.colour, hatch: g.hatch, dots: g.dots, stripe: g.stripe, values: valuesOf(rows, g), valuesC: compare ? valuesOf(compare, g) : null,
       valuesAll: all ? all.map(units => valuesOf(units, g)) : null})).filter(s => s.values.length || (s.valuesAll || []).some(v => v.length));
     const nz = series.flatMap(s => s.values.concat(s.valuesC || [], ...(s.valuesAll || []))).filter(v => v > 0).sort((a, b) => a - b), max = nz.length ? nz[nz.length - 1] : 0;
     // Outliers: above the 95th percentile with 20 or more units with matches; with 5-19, beyond 3 IQR above the
@@ -544,16 +550,19 @@
   const plain = v => num(+v.toFixed(4));       // axis ticks and bin edges: round numbers, no trailing zeros
   const fill = c => `fill:var(${c})`;
   // A group's paint: its colour, or for a striped (hatch) or dotted (dots) group its colour in diagonal stripes or a
-  // grid of dots (each covering about half and a third of the area). paint() is a CSS background for HTML swatches
+  // grid of dots (each covering about half and a third of the area), or for a two-colour group (stripe) diagonal
+  // stripes of its colour and its stripe colour, half each. paint() is a CSS background for HTML swatches
   // and bars. In SVG, svgPaint() fills with a pattern that hatchDefs() defines under ids
   // unique to that drawing, since several charts can share a page.
-  const paint = g => g.hatch ? `background:repeating-linear-gradient(135deg,var(${g.colour}) 0 2px,transparent 2px 4px)`
+  const paint = g => g.stripe ? `background:repeating-linear-gradient(135deg,var(${g.colour}) 0 2px,var(${g.stripe}) 2px 4px)`
+    : g.hatch ? `background:repeating-linear-gradient(135deg,var(${g.colour}) 0 2px,transparent 2px 4px)`
     : g.dots ? `background:radial-gradient(circle,var(${g.colour}) 0 1.2px,transparent 1.6px) 0 0/4px 4px` : `background:var(${g.colour})`;
   let hatchSeq = 0;
   const hatchIds = () => { const n = ++hatchSeq; return key => `pc-hatch-${n}-${String(key).replace(/[^\w-]/g, '_')}`; };
-  const textured = g => g.hatch || g.dots;
-  const hatchDefs = (groups, id) => groups.filter(textured).map(g => `<pattern id="${id(g.key)}" width="4" height="4" patternUnits="userSpaceOnUse"${g.hatch
-    ? ` patternTransform="rotate(45)"><rect width="2" height="4" style="${fill(g.colour)}"/>` : `><circle cx="2" cy="2" r="1.3" style="${fill(g.colour)}"/>`}</pattern>`).join('');
+  const textured = g => g.hatch || g.dots || g.stripe;
+  const hatchDefs = (groups, id) => groups.filter(textured).map(g => `<pattern id="${id(g.key)}" width="4" height="4" patternUnits="userSpaceOnUse"${g.stripe
+    ? ` patternTransform="rotate(45)"><rect width="2" height="4" style="${fill(g.colour)}"/><rect x="2" width="2" height="4" style="${fill(g.stripe)}"/>`
+    : g.hatch ? ` patternTransform="rotate(45)"><rect width="2" height="4" style="${fill(g.colour)}"/>` : `><circle cx="2" cy="2" r="1.3" style="${fill(g.colour)}"/>`}</pattern>`).join('');
   const svgPaint = (g, id) => textured(g) ? `fill:url(#${id(g.key)})` : fill(g.colour);
   const MODE_NAMES = {section: 'section', regime: 'Golf regime', regimeSplit: 'Golf regime +', golf2: 'Golf v2', golf2x: 'Golf v2 extended', golf21: 'Golf v2.1', golf21x: 'Golf v2.1 extended',
     rz: 'RZ language', currier: 'Currier language', hand: 'LFD hand', comparison: 'comparison'};
@@ -1176,7 +1185,7 @@
   const api = {GOLF_NUMBERS, GOLF2_PAINTS, INTERMEDIATE_COLOUR, paint, SECTION_COLOURS, RZ_COLOURS, RZ_LABELS, CURRIER_COLOURS, HAND_COLOURS, OTHER, rzClass, category, grouping, unitModel, pageModel, unitName,
     rowOrder, pageOrder, layoutColumns, axisLabels, statistics, histograms, niceWidth, measureOf, niceTicks, pearson, spearman, correlations, seriesTable, cutLabel, hideGroups, mount,
     SERIES_FAMILIES, SERIES_COLOURS, AUTO_COLOURS, seriesColour, assignColours, arrangement, patternValues,
-    GOLF21_PAINTS, PATH_ORDERS, pathPlace, placeBlocks, pathTicks, columnFrame};
+    golf21Colour, PATH_ORDERS, pathPlace, placeBlocks, pathTicks, columnFrame};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.EchoPageChart = api;
 })(typeof window !== 'undefined' ? window : globalThis);

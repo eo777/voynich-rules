@@ -6,9 +6,12 @@
 <title>Echo · Rule analyzer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=0f6a822a9f">
+<link rel="stylesheet" href="theme.css?v=5fb19413e9">
 <link rel="stylesheet" href="evidence.css?v=19cb6365ba">
 <link rel="stylesheet" href="evidence_guide.css?v=a869957f06">
+<link rel="stylesheet" href="copying_trace.css?v=e77df53a48">
+<link rel="stylesheet" href="page_copy.css?v=2a61582cb0">
+<link rel="stylesheet" href="generator_pages.css?v=136b314a89">
 <style>
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.45 Inter, system-ui, sans-serif; }
@@ -377,14 +380,14 @@ svg.mini { display: block; margin-top: 4px; }
 @media (max-width: 900px) { .main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .side { border-left: 0; border-top: 1px solid var(--line); max-height: 40vh; } }
 </style>
 <link rel="stylesheet" href="network_view.css?v=cb3f4519a3">
-<link rel="stylesheet" href="workbench.css?v=5b9ab9e6c4">
+<link rel="stylesheet" href="workbench.css?v=77aab86fa4">
 </head>
 <body>
 <div class="app">
   <header>
     <div class="brandline"><h1>Echo <span>/ Rule analyzer</span></h1><span class="research-tag">Voynich dialect research · work in progress<span id="releaseTag"></span></span></div>
     <div class="sub">Understand the rules, investigate what remains, and explore Herbal A ↔ Herbal B.</div>
-    <nav class="tabs" aria-label="Analyzer views"><button class="tab" data-tab="residuals">Residuals</button><button class="tab" data-tab="distribution">Distribution</button><button class="tab" data-tab="contexts">Words &amp; contexts</button><button class="tab" data-tab="patterns">Compare patterns</button><button class="tab" data-tab="lab">Rule lab</button><button class="tab" data-tab="evidence">Evidence</button><button class="tab on" data-tab="net">Network</button><button class="tab" data-tab="sections">Sections</button><button class="tab" data-tab="stages">Stages</button><button class="tab" data-tab="chain">Chain</button><button class="tab" data-tab="translate">Translate</button><button class="tab" data-tab="rules">Rule manager</button></nav>
+    <nav class="tabs" aria-label="Analyzer views"><button class="tab" data-tab="residuals">Residuals</button><button class="tab" data-tab="distribution">Distribution</button><button class="tab" data-tab="contexts">Words &amp; contexts</button><button class="tab" data-tab="patterns">Compare patterns</button><button class="tab" data-tab="lab">Rule lab</button><button class="tab" data-tab="evidence">Evidence</button><button class="tab on" data-tab="net">Network</button><button class="tab" data-tab="sections">Sections</button><button class="tab" data-tab="stages">Stages</button><button class="tab" data-tab="chain">Chain</button><button class="tab" data-tab="variants">Variants</button><button class="tab" data-tab="translate">Translate</button><button class="tab" data-tab="rules">Rule manager</button></nav>
   </header>
   <div class="gbar">
     <button class="wb-button" id="manageRules">Manage rules</button>
@@ -501,9 +504,9 @@ svg.mini { display: block; margin-top: 4px; }
   <div class="rulesPage" id="rulesPage" hidden></div>
   <div class="wb-page" id="workbenchPage" hidden></div>
 </div>
-<script src="release.js?v=4e9d9bd20d"></script>
+<script src="release.js?v=5a406a2634"></script>
 <script src="network_data.js?v=c730680c78"></script>
-<script src="rule_catalog_data.js?v=bd379cda76"></script>
+<script src="rule_catalog_data.js?v=6750ae57c9"></script>
 <script src="research_links.js?v=c929aa43a1"></script>
 <script src="rule_manager.js?v=7d7c444b67"></script>
 <script src="graph_metrics.js?v=9369ffd07e"></script>
@@ -648,6 +651,7 @@ function currentView() {
   else if (state.tab === 'translate') Object.assign(v, {page: state.tr.folio, from: state.tr.from, to: state.tr.to, show: state.tr.view});
   else if (state.tab === 'stages') Object.assign(v, window.EchoStages.view());
   else if (state.tab === 'chain') Object.assign(v, window.EchoChain.view());
+  else if (state.tab === 'variants') Object.assign(v, window.EchoVariants.view());
   else if (state.tab !== 'rules') Object.assign(v, window.EchoWorkbench.view(state.tab));
   return v;
 }
@@ -678,6 +682,7 @@ function applyLink(hash) {
   if (tab === 'evidence') window.EchoEvidence.applyView(p);
   else if (tab === 'stages') window.EchoStages.applyView(p);
   else if (tab === 'chain') window.EchoChain.applyView(p);
+  else if (tab === 'variants') window.EchoVariants.applyView(p);
   else if (['residuals', 'distribution', 'contexts', 'patterns', 'lab'].includes(tab)) window.EchoWorkbench.applyView(tab, p);
   document.querySelector(`.tab[data-tab="${tab}"]`).click();
   const sel = R.text(p.sel, 60);
@@ -1637,12 +1642,12 @@ document.getElementById('gloss').innerHTML = `<div class="gh"><b>Glossary</b><bu
 document.getElementById('glossBtn').onclick = () => { const g = document.getElementById('gloss'); g.hidden = !g.hidden; };
 document.getElementById('glossX').onclick = () => { document.getElementById('gloss').hidden = true; };
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
-  window.EchoWorkbench?.leave(); window.EchoStages?.leave(); window.EchoChain?.leave();
+  window.EchoWorkbench?.leave(); window.EchoStages?.leave(); window.EchoChain?.leave(); window.EchoVariants?.leave();
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
   document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-current', x === t ? 'page' : 'false'));
   state.tab = t.dataset.tab; state.sel = null; state.selCell = null;
   const app = document.querySelector('.app');
-  const workbench = ['residuals', 'distribution', 'contexts', 'patterns', 'lab', 'stages', 'evidence', 'chain'].includes(state.tab);
+  const workbench = ['residuals', 'distribution', 'contexts', 'patterns', 'lab', 'stages', 'evidence', 'chain', 'variants'].includes(state.tab);
   app.classList.toggle('workbenchMode', workbench);
   app.classList.toggle('evidenceMode', state.tab === 'evidence');
   document.getElementById('workbenchPage').hidden = !workbench;
@@ -1653,9 +1658,9 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.getElementById('trPage').hidden = state.tab !== 'translate';
   document.getElementById('rulesPage').hidden = state.tab !== 'rules';
   document.getElementById('secPage').hidden = state.tab !== 'sections';
-  if (state.tab === 'evidence') window.EchoEvidence.show(document.getElementById('workbenchPage')); else if (state.tab === 'stages') window.EchoStages?.show(document.getElementById('workbenchPage')); else if (state.tab === 'chain') window.EchoChain?.show(document.getElementById('workbenchPage')); else if (workbench) window.EchoWorkbench?.show(state.tab); else if (state.tab === 'rules') renderRules(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else { draw.fitted = false; draw(); }
+  if (state.tab === 'evidence') window.EchoEvidence.show(document.getElementById('workbenchPage')); else if (state.tab === 'stages') window.EchoStages?.show(document.getElementById('workbenchPage')); else if (state.tab === 'chain') window.EchoChain?.show(document.getElementById('workbenchPage')); else if (state.tab === 'variants') window.EchoVariants?.show(document.getElementById('workbenchPage')); else if (workbench) window.EchoWorkbench?.show(state.tab); else if (state.tab === 'rules') renderRules(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else { draw.fitted = false; draw(); }
 });
-function redraw() { if (state.tab === 'stages') window.EchoStages?.refresh(); else if (state.tab === 'chain') window.EchoChain?.refresh(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else if (state.tab === 'net') draw(); }
+function redraw() { if (state.tab === 'stages') window.EchoStages?.refresh(); else if (state.tab === 'chain') window.EchoChain?.refresh(); else if (state.tab === 'variants') window.EchoVariants?.refresh(); else if (state.tab === 'sections') renderSections(); else if (state.tab === 'translate') renderTranslate(); else if (state.tab === 'net') draw(); }
 // Menus float above the reading area; expanding help must not move the text.
 document.addEventListener('pointerdown',e=>{if(state.tab==='translate')document.querySelectorAll('.trOptions[open],#ruleMenu[open]').forEach(d=>{if(!d.contains(e.target))d.open=false;});});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.tab==='translate')document.querySelectorAll('.trOptions[open],#ruleMenu[open]').forEach(d=>{d.open=false;d.querySelector('summary').focus();});});
@@ -1680,19 +1685,27 @@ if (!initialLinkApplied) draw();
 })();
 </script>
 <script src="workbench_data.js?v=9eff70fcff"></script>
-<script src="manuscript_data.js?v=01ae3024d0"></script>
+<script src="manuscript_data.js?v=cd74ff9d0e"></script>
 <script src="stage_data.js?v=35826460f3"></script>
 <script src="chain_data.js?v=6b18b7c04d"></script>
-<script src="chain_schedule.js?v=de3e716a22"></script>
+<script src="chain_schedule.js?v=2cac383a02"></script>
 <script src="fit_data.js?v=edce679302"></script>
 <script src="fit_core.js?v=c079da9d91"></script>
 <script src="workbench_core.js?v=68fefad532"></script>
-<script src="page_chart.js?v=2d735d5304"></script>
+<script src="page_chart.js?v=461cff39d5"></script>
 <script src="context_statistics.js?v=147218c350"></script>
 <script src="workbench.js?v=4302bbd179"></script>
 <script src="stage_flow.js?v=d390084f5d"></script>
 <script src="stage_view.js?v=e7bfb4fdd8"></script>
-<script src="chain_flow.js?v=c34aabaa82"></script>
-<script src="chain_view.js?v=1b935a5898"></script>
+<script src="chain_flow.js?v=7ea6f54804"></script>
+<script src="chain_view.js?v=5efd8e11c3"></script>
+<script src="variants_flow.js?v=03ff6e624f"></script>
+<script src="copying_trace_data.js?v=029487752a"></script>
+<script src="copying_trace_generator_data.js?v=c4d947d636"></script>
+<script src="copying_trace_view.js?v=5307a78b8b"></script>
+<script src="page_copy_flow.js?v=7842fb8d8c"></script>
+<script src="generator_pages_data.js?v=ca79e4ff11"></script>
+<script src="generator_pages_view.js?v=fb8f3cedfc"></script>
+<script src="variants_view.js?v=9833ca4748"></script>
 </body>
 </html>

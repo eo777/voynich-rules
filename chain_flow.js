@@ -15,6 +15,11 @@
   const ALT_CHAIN = ['1a', '1b', '1.5a', '2a', '3a', '3b', '3c', '4c', '4a'];        // Golf's alternate curve: Stars-T, Stars-S, Bio
   const OFF_CHAIN = ['5a', '6'];
   const TERMINAL = new Set(['3c', '4a', '4c']);                                         // Golf's terminal cohort: Stars-T, Bio, Stars-S
+  // Golf's fork at 3a (team_golf/fork_at_3a_20261011): one trunk 1a → 1b → 1.5a → 2a → 3a, then two arms, 3a → 3b → 4a
+  // (Herbal B to Bio) and 3a → 3c → 4c (Herbal B to Stars-T to Stars-S); on the group axes only (the bifolia keep a line)
+  const FORK = {at: '3a', trunk: ['1a', '1b', '1.5a', '2a', '3a'], arms: [{key: 'bio', label: 'Bio arm', groups: ['3b', '4a']}, {key: 'stars', label: 'Stars arm', groups: ['3c', '4c']}]};
+  const FORK_CHAIN = FORK.trunk.concat(...FORK.arms.map(a => a.groups));              // the fork's columns: the trunk, then each arm
+  const ORDERS = ['proposed', 'alternate', 'fork'];
   const MIDDLE_KEY = 'mid', MIDDLE_GROUPS = ['5a', '6'];                               // the off-chain classes between 2a and 3a on the path
   const isGroups = axis => axis === 'groups' || axis === 'groupsPos';
   const MIN_GROUP_GAP = 78;                                                             // px between group columns placed at path positions
@@ -43,29 +48,43 @@
   // pooled bifolia by rank, every paragraph page of the sheet, with the pool's working group from `pools` (chain_data)
   // or, without it, the one class of its pages. `order` 'proposed' follows Golf's proposed curve (Stars-T, Bio,
   // Stars-S); 'alternate' its alternate curve (Stars-T, Stars-S, Bio): the groups 4c and 4a swap, and the pools take
-  // the alternate curve's ranks and positions from `pools` (alt_rank, alt_position) where they are saved.
+  // the alternate curve's ranks and positions from `pools` (alt_rank, alt_position) where they are saved; 'fork' is
+  // Golf's fork at 3a on the group axes (the trunk to 3a, then the Bio arm 3b, 4a and the Stars arm 3c, 4c, each column
+  // with its slot on x and its row; the bifolia fall back to the alternate order). The result carries the steps as
+  // column-index pairs and the paths (each a chain of column indices) that the ledgers, the parking and the layout follow.
   function columns({manuscript, lines, axis = 'groups', mergeQ = false, pools = null, order: ord = 'proposed', middle = false}) {
     const G = manuscript.golf21 || {units: {}, classes: []}, sheets = (manuscript.golf_path || {}).sheets || {};
-    const spelling = mergeQ ? core : w => w, alternate = ord === 'alternate';
+    const fork = ord === 'fork' && isGroups(axis);
+    const spelling = mergeQ ? core : w => w, alternate = ord === 'alternate' || (ord === 'fork' && !fork);
     const para = lines.filter(l => (l.category || 'para') === 'para');
-    let cols;
+    let cols, forkMeta = null;
     if (isGroups(axis)) {
       const labels = Object.fromEntries((G.classes || []).map(c => [c.code, c.label]));
-      // the slots of the proposed order, and the codes that fill them (the alternate order swaps 4a and 4c); with
-      // `middle`, one more slot after 2a pools the paragraph text of the two off-chain pools between 2a and 3a on the
-      // path (J:69-70, class 5a: f69r and f70r2; H:58-65, class 6: f58): a page counts there only when its class is
-      // 5a or 6 and its sheet is one of those pools, so 5a pages on 2a or 3c sheets and f65v (class 3b) stay out
+      // the slots of the proposed order, and the codes that fill them (the alternate order swaps 4a and 4c; the fork
+      // lists the trunk, then each arm); with `middle`, one more slot after 2a pools the paragraph text of the two
+      // off-chain pools between 2a and 3a on the path (J:69-70, class 5a: f69r and f70r2; H:58-65, class 6: f58): a page
+      // counts there only when its class is 5a or 6 and its sheet is one of those pools, so 5a pages on 2a or 3c sheets
+      // and f65v (class 3b) stay out
       const withMiddle = list => { const out = list.slice(); if (middle) out.splice(out.indexOf('2a') + 1, 0, MIDDLE_KEY); return out; };
-      const slots = withMiddle(CHAIN), codes = withMiddle(alternate ? ALT_CHAIN : CHAIN);
+      const slots = withMiddle(CHAIN), codes = withMiddle(fork ? FORK_CHAIN : alternate ? ALT_CHAIN : CHAIN);
       const midPools = pools ? new Set(Object.keys(pools).filter(k => MIDDLE_GROUPS.includes(pools[k].group))) : null;
       cols = codes.map((code, i) => column(code, code === MIDDLE_KEY
         ? {group: MIDDLE_KEY, title: 'Celestial paragraphs of f69r and f70r2 (5a) and f58 (6): the paragraph text of the two pools between 2a and 3a on the path', rank: i + 1}
         : {group: code, title: labels[code] || '', rank: i + 1}));
       if (axis === 'groupsPos' && pools) {
         // each slot sits at the median proposed-path position of its group's pools (its span kept for the header); the
-        // alternate order fills the same slots in its own order, so the geometry stays the proposed path's
+        // alternate order fills the same slots in its own order, so the geometry stays the proposed path's; under the
+        // fork each arm column sits at its own group's median
         const of = groups_ => Object.values(pools).filter(p => groups_.includes(p.group)).map(p => p.position).sort((a, b) => a - b);
-        slots.forEach((code, i) => { const ps = of(code === MIDDLE_KEY ? MIDDLE_GROUPS : [code]); cols[i].position = ps.length ? ps[Math.floor(ps.length / 2)] : null; cols[i].span = ps.length ? [ps[0], ps[ps.length - 1]] : null; });
+        slots.forEach((code, i) => { const own = fork ? cols[i].key : code, ps = of(own === MIDDLE_KEY ? MIDDLE_GROUPS : [own]); cols[i].position = ps.length ? ps[Math.floor(ps.length / 2)] : null; cols[i].span = ps.length ? [ps[0], ps[ps.length - 1]] : null; });
+      }
+      cols.forEach((c, i) => { c.slot = i; c.row = 0; });
+      if (fork) {
+        // the trunk keeps its slots; each arm's columns take the slots after the fork column, the second arm in a row of its own
+        const at = cols.findIndex(c => c.key === FORK.at);
+        const arms = FORK.arms.map((arm, r) => ({key: arm.key, label: arm.label, row: r, cols: arm.groups.map(g => cols.findIndex(c => c.key === g))}));
+        for (const arm of arms) arm.cols.forEach((i, k) => { cols[i].slot = at + 1 + k; cols[i].row = arm.row; });
+        forkMeta = {at, arms};
       }
       const at = new Map(cols.map(c => [c.key, c]));
       if (middle) for (const g of MIDDLE_GROUPS) at.set(g, at.get(MIDDLE_KEY));
@@ -92,12 +111,117 @@
     }
     const spellings = new Set();
     for (const c of cols) for (const w of c.counts.keys()) spellings.add(w);
-    return {axis, mergeQ, order: alternate ? 'alternate' : 'proposed', columns: cols, spellings, steps: cols.slice(1).map((c, i) => [i, i + 1])};
+    // the steps as column-index pairs and the paths each step lies on: one line, or under the fork the trunk followed by each arm
+    let steps = cols.slice(1).map((c, i) => [i, i + 1]), paths = [cols.map((c, i) => i)];
+    if (forkMeta) {
+      const trunk = cols.map((c, i) => i).filter(i => i <= forkMeta.at);
+      steps = trunk.slice(1).map(i => [i - 1, i]);
+      for (const arm of forkMeta.arms) { let prev = forkMeta.at; for (const i of arm.cols) { steps.push([prev, i]); prev = i; } }
+      paths = forkMeta.arms.map(arm => trunk.concat(arm.cols));
+    }
+    return {axis, mergeQ, order: fork ? 'fork' : alternate ? 'alternate' : 'proposed', columns: cols, spellings, steps, paths, fork: forkMeta};
   }
+  // The steps of a column set as index pairs: its own list, else every neighbouring pair (a bare {columns} as the tests
+  // and the studies build it).
+  const stepsOf = cols => (Array.isArray(cols.steps) && cols.steps.length && Array.isArray(cols.steps[0]) ? cols.steps : cols.columns.slice(1).map((c, i) => [i, i + 1]));
+  const pathsOf = cols => (Array.isArray(cols.paths) && cols.paths.length ? cols.paths : [cols.columns.map((c, i) => i)]);
+  // The same column set without the columns named (by key): on each path the surviving neighbours of a removed column
+  // form one direct step, the paths and the fork lose the column, every index moves down, the slots close up, and each
+  // new step remembers the original step keys it spans (`spans`: 'a>c' → ['a>b', 'b>c']) so a schedule can be read
+  // across the gap (spanSchedule). The spellings are recounted over the surviving columns.
+  function dropColumns(cols, keys) {
+    const K = cols.columns, gone = new Set(keys || []);
+    if (!K.some(c => gone.has(c.key))) return cols;
+    const keep = K.map((c, i) => i).filter(i => !gone.has(K[i].key)), map = new Map(keep.map((i, k) => [i, k]));
+    const columns = keep.map(i => ({...K[i]}));
+    const seen = new Set(), steps = [], spans = {}, paths = [];
+    for (const p of pathsOf(cols)) {
+      const survivors = p.filter(i => !gone.has(K[i].key));
+      paths.push(survivors.map(i => map.get(i)));
+      survivors.forEach((i, k) => { columns[map.get(i)].slot = k; });      // the slots close up along each path
+      for (let k = 0; k + 1 < survivors.length; k++) {
+        const a = survivors[k], b = survivors[k + 1], key = map.get(a) + '>' + map.get(b);
+        if (seen.has(key)) continue;
+        seen.add(key); steps.push([map.get(a), map.get(b)]);
+        const ia = p.indexOf(a), ib = p.indexOf(b), prev = cols.spans || null;
+        // the original steps between a and b on this path; a column set that was itself reduced resolves them further
+        spans[K[a].key + '>' + K[b].key] = p.slice(ia, ib).map((x, q) => K[x].key + '>' + K[p[ia + q + 1]].key).flatMap(k => (prev && prev[k] ? prev[k] : [k]));
+      }
+    }
+    let fork = null;
+    if (cols.fork) {
+      const trunk = (pathsOf(cols)[0] || []).slice(0, (pathsOf(cols)[0] || []).indexOf(cols.fork.at) + 1).filter(i => !gone.has(K[i].key));
+      const arms = cols.fork.arms.map(a => ({...a, cols: a.cols.filter(i => !gone.has(K[i].key)).map(i => map.get(i))})).filter(a => a.cols.length);
+      if (trunk.length && arms.length > 1) fork = {at: map.get(trunk[trunk.length - 1]), arms};
+    }
+    const spellings = new Set();
+    for (const c of columns) for (const w of c.counts.keys()) spellings.add(w);
+    // a path left as a prefix of another (an arm hidden entirely) is the same line and is dropped
+    const kept = paths.filter(p => p.length).filter((p, k, all) => !all.some((q, l) => l !== k && q.length > p.length && p.every((v, idx) => q[idx] === v)));
+    return {...cols, columns, spellings, steps, paths: kept, fork, spans, hidden: K.filter(c => gone.has(c.key)).map(c => c.key)};
+  }
+  // The same column set without its middle column: the two steps around it become the one direct step.
+  const dropMiddle = cols => dropColumns(cols, [MIDDLE_KEY]);
+  // A schedule read across hidden columns: a step with no cells of its own that spans several original steps runs each
+  // rule at the clamped sum of its degrees over the steps it replaces (full forward then partial reverse = partial
+  // forward; opposite full degrees cancel); the A-side guard covers a spanned step when it covers every step inside it.
+  // The two half-steps around the middle column read as the one chain step they refine ('2a>mid', 'mid>3a' → '2a>3a'),
+  // so a gap that contains the middle column is not counted twice.
+  const collapseMiddle = list => { const out = []; for (const k of list) { const last = out[out.length - 1]; if (last && last.endsWith('>' + MIDDLE_KEY) && k.startsWith(MIDDLE_KEY + '>')) out[out.length - 1] = last.split('>')[0] + '>' + k.split('>')[1]; else out.push(k); } return out; };
+  function spanSchedule(schedule, spans) {
+    if (!schedule || !spans) return schedule;
+    const span = Object.fromEntries(Object.keys(spans).map(k => [k, collapseMiddle(spans[k])]));
+    const keys = Object.keys(span).filter(k => span[k].length > 1 || (span[k].length === 1 && span[k][0] !== k));
+    if (!keys.length) return schedule;
+    const rules = {}, spanned = {};
+    for (const [code, row] of Object.entries(schedule.rules || {})) {
+      const r = {...row};
+      for (const k of keys) if (r[k] == null) { r[k] = Math.max(-1, Math.min(1, span[k].reduce((v, s) => v + (row[s] || 0), 0))); spanned[k] = span[k]; }
+      rules[code] = r;
+    }
+    const guarded = schedule.no_new_d && Array.isArray(schedule.no_new_d.steps) ? schedule.no_new_d.steps : null;
+    const no_new_d = guarded ? {...schedule.no_new_d, steps: guarded.concat(Object.keys(spanned).filter(k => span[k].every(s => guarded.includes(s))))} : schedule.no_new_d;
+    return {...schedule, rules, no_new_d, spanned};
+  }
+  // The flows between a set's kept words and its removed words, per column: what the removed words receive at the step
+  // into the column and send at the step out of it (the two faces of the "removed words" band); routes among the
+  // removed words themselves, and their own kept and unexplained mass, are not drawn.
+  function removedFlows(L, n, removed) {
+    const inflow = new Array(n).fill(0), outflow = new Array(n).fill(0);
+    const add = (routes, i, j) => { for (const r of routes || []) { const a = removed.has(r.from), b = removed.has(r.to); if (a === b) continue; if (b) inflow[j] += r.mass; else outflow[i] += r.mass; } };
+    for (const s of L || []) add(s.routes, s.i != null ? s.i : s.step, s.j != null ? s.j : (s.i != null ? s.i : s.step) + 1);
+    if (L && L.pass) add(L.pass.routes, L.pass.i != null ? L.pass.i : L.pass.step, L.pass.j != null ? L.pass.j : L.pass.step2 + 1);
+    return {inflow, outflow};
+  }
+  const REMOVED_LABEL = 'removed words';
+  const REST_LABEL = 'rest of the family';
+
+  // The lineage of `seeds` along the steps, as the selection lineage reads it: forward, every key a flow out of a key
+  // already reached could feed, step after step (descendants); backward, every key that could feed one already reached,
+  // step before step (ancestors). Each path is followed on its own, so under the fork a key reached on one arm is not
+  // followed on the other. `flows` are {from, to, i, j}, i and j the column indices of their ends; a flow spanning two
+  // steps (the middle text's transit) is read at each. A capacity reading, not descent. Returns the keys reached each
+  // way, all of them (`keys`), and the flows followed forward (`out`) and backward (`into`).
+  function lineageOf(flows, paths, seeds) {
+    const fwd = new Set(seeds), back = new Set(seeds), out = new Set(), into = new Set();
+    for (const p of paths || []) {
+      const pos = new Map(p.map((c, k) => [c, k]));
+      const steps = p.slice(1).map((c, k) => flows.filter(f => pos.has(f.i) && pos.has(f.j) && pos.get(f.i) <= k && pos.get(f.j) > k));
+      const F = new Set(seeds), B = new Set(seeds);
+      for (const fs of steps) for (const f of fs) if (F.has(f.from)) { F.add(f.to); out.add(f); }
+      for (const fs of steps.slice().reverse()) for (const f of fs) if (B.has(f.to)) { B.add(f.from); into.add(f); }
+      for (const k of F) fwd.add(k); for (const k of B) back.add(k);
+    }
+    return {fwd, back, keys: new Set([...fwd, ...back]), out, into};
+  }
+  // a ledger's routes as flows between spellings at their columns, with the middle text's transit routes
+  const ledgerFlows = L => (L || []).flatMap(s => s.routes.map(r => ({from: r.from, to: r.to, i: s.i, j: s.j, mass: r.mass})))
+    .concat(L && L.pass ? L.pass.routes.map(r => ({from: r.from, to: r.to, i: L.pass.i, j: L.pass.j, mass: r.mass})) : []);
 
   // The spellings a scope names: 'family' = the word's connected component under the active rules (the network is
   // q-merged; in exact mode each member's q spelling present in the text joins it), 'front' / 'tail' = every spelling
-  // sharing the word's saved FRONT or TAIL, 'pattern' = the spellings matching the pattern (app syntax).
+  // sharing the word's saved FRONT or TAIL, 'pattern' = the spellings matching the pattern (app syntax). 'lineage'
+  // starts from the family: the view keeps the spellings the family's rule flows link to the word (lineageOf).
   function members({scope, query, mergeQ = false, spellings, data, rules, splits}) {
     const q = String(query || '').trim(), none = (error, seed = null) => ({words: new Set(), seed, error});
     if (scope === 'all') return {words: new Set(spellings), seed: null, error: spellings.size ? null : 'No paragraph text.'};
@@ -110,7 +234,7 @@
     }
     const seed = mergeQ ? core(q) : q;
     if (!spellings.has(seed)) return none(`“${seed}” is not in the paragraph text${seed !== q ? ' (q merged)' : ''}.`, seed);
-    if (scope === 'family') {
+    if (scope === 'family' || scope === 'lineage') {
       const id = core(q), adj = new Map();
       for (const e of CI.links(data, rules)) for (const [a, b] of [[e.s, e.t], [e.t, e.s]]) { if (!adj.has(a)) adj.set(a, new Set()); adj.get(a).add(b); }
       const component = GM.closure([id], adj), words = new Set();
@@ -136,12 +260,16 @@
     return by === 'front' ? (s[0] || '∅') : (w.slice(s[0].length) || '∅');
   }
   const OTHER_LABEL = {spelling: 'other members', tail: 'other endings', front: 'other fronts', bigram: 'other bigrams'};
-  const columnsMeta = K => K.map(c => ({key: c.key, label: c.label, title: c.title, group: c.group, rank: c.rank, position: c.position, span: c.span || null, N: c.N, pages: c.pages ? c.pages.size : 0}));
+  const columnsMeta = K => K.map((c, i) => ({key: c.key, label: c.label, title: c.title, group: c.group, rank: c.rank, position: c.position, span: c.span || null, N: c.N, pages: c.pages ? c.pages.size : 0, slot: c.slot != null ? c.slot : i, row: c.row || 0}));
+  // what a series carries of its column set's shape: the steps, the paths and the fork, for the layout
+  const shapeOf = cols => ({steps: stepsOf(cols), paths: pathsOf(cols), fork: cols.fork || null});
 
   // Each band's count, rate per 10k of the column and share of the family per column. `by` 'spelling' (one band per
   // spelling), 'tail' or 'front' (one band per class of the saved split, holding every member spelling); the bands are
   // the `cap` largest by summed rate (ties alphabetical), the rest pooled as one band so the family total is conserved.
-  function series(cols, words, {cap = 12, by = 'spelling', splits = null, pin = []} = {}) {
+  // `removed` ({words, inflow, outflow} from removedFlows, and an optional label) adds the "removed words" band after the
+  // pooled one: its value in a column is the larger of what it receives there and what it sends from there, so both faces fit inside it.
+  function series(cols, words, {cap = 12, by = 'spelling', splits = null, pin = [], removed = null} = {}) {
     const K = cols.columns, list = [...words];
     const rate = (n, c) => (c.N ? n / c.N * PER : 0);
     const totals = K.map(c => { let n = 0; for (const w of list) n += c.counts.get(w) || 0; return {N: c.N, n, rate: rate(n, c)}; });
@@ -157,7 +285,61 @@
     const bands = kept.map(e => ({word: by === 'spelling' ? e.key : null, label: e.key, kind: by, words: e.words, values: values(e.words), mass: e.mass}));
     const restWords = rest.flatMap(e => e.words);
     const other = rest.length ? {word: null, label: OTHER_LABEL[by] || 'other', kind: by, pooled: true, classes: rest.length, words: restWords, values: values(restWords), mass: rest.reduce((v, e) => v + e.mass, 0)} : null;
-    return {axis: cols.axis, mergeQ: cols.mergeQ, order: cols.order, by, columns: columnsMeta(K), bands, other, totals, sparse: totals.map(t => t.n < SPARSE), words: sorted, classes: entries.length, cap};
+    let removedBand = null;
+    if (removed && removed.words && removed.words.length) {
+      const vals = K.map((c, i) => { const inflow = removed.inflow[i] || 0, outflow = removed.outflow[i] || 0, v = Math.max(inflow, outflow); return {n: Math.round(v * c.N / PER), rate: v, share: totals[i].rate ? v / totals[i].rate : 0, inflow, outflow}; });
+      removedBand = {word: null, label: removed.label || REMOVED_LABEL, kind: by, pooled: true, removed: true, classes: removed.words.length, words: removed.words.slice(), values: vals, mass: vals.reduce((v, x) => v + x.rate, 0)};
+    }
+    return {axis: cols.axis, mergeQ: cols.mergeQ, order: cols.order, by, columns: columnsMeta(K), ...shapeOf(cols), bands, other, removed: removedBand, totals, sparse: totals.map(t => t.n < SPARSE), words: sorted, classes: entries.length, cap};
+  }
+
+  // The stacking order of the ribbons: 'mass' keeps the series' order (largest first); 'cross' swaps bands while the
+  // crossings they would be drawn with fall. The count follows the layout: a flow crosses the kept ribbon of every band
+  // stacked between its two ends, and two flows cross when their ends are in opposite order; each crossing weighs the
+  // thinner of the two ribbons, so hairlines count little. The pooled band and the removed words stay last; the
+  // bands' values and pooling are unchanged, only their order. Bigram series are ordered the same way.
+  function stackOrder(S, L, mode = 'cross') {
+    const bands = S.bands, n = bands.length;
+    if (mode !== 'cross' || n < 3 || !L || !L.length) return {...S, stack: 'mass'};
+    const bandOf = new Map(); bands.forEach((b, bi) => b.words.forEach(w => bandOf.set(w, bi)));
+    const steps = L.map(step => {
+      const kept = new Array(n).fill(0), flows = new Map();
+      for (const p of step.perWord.values()) { const bi = bandOf.get(p.word); if (bi != null) kept[bi] += p.kept; }
+      for (const rt of step.routes) {
+        const f = bandOf.get(rt.from), t = bandOf.get(rt.to); if (f == null || t == null) continue;
+        if (f === t) { kept[f] += rt.mass; continue; }
+        const k = f + '>' + t; flows.set(k, (flows.get(k) || 0) + rt.mass);
+      }
+      return {kept, flows: [...flows.entries()].map(([k, m]) => { const [f, t] = k.split('>').map(Number); return {f, t, m}; })};
+    }).filter(s => s.flows.length);
+    if (!steps.length) return {...S, stack: 'cross'};
+    const cost = pos => {
+      let c = 0;
+      for (const s of steps) {
+        for (const a of s.flows) { const lo = Math.min(pos[a.f], pos[a.t]), hi = Math.max(pos[a.f], pos[a.t]); for (let b = 0; b < n; b++) if (pos[b] > lo && pos[b] < hi && s.kept[b] > 0) c += Math.min(a.m, s.kept[b]); }
+        for (let x = 0; x < s.flows.length; x++) for (let y = x + 1; y < s.flows.length; y++) { const a = s.flows[x], b = s.flows[y]; if ((pos[a.f] - pos[b.f]) * (pos[a.t] - pos[b.t]) < 0) c += Math.min(a.m, b.m); }
+      }
+      return c;
+    };
+    let order = bands.map((b, i) => i);
+    const posOf = ord => { const p = new Array(n); ord.forEach((bi, rank) => { p[bi] = rank; }); return p; };
+    let best = cost(posOf(order)), improved = true, passes = 0;
+    // pairwise swaps, then moving one band to another place, until neither helps
+    while (improved && passes++ < 12) {
+      improved = false;
+      for (let x = 0; x < n; x++) for (let y = x + 1; y < n; y++) {
+        [order[x], order[y]] = [order[y], order[x]];
+        const c = cost(posOf(order));
+        if (c < best - 1e-9) { best = c; improved = true; } else [order[x], order[y]] = [order[y], order[x]];
+      }
+      for (let x = 0; x < n; x++) for (let y = 0; y < n; y++) {
+        if (y === x) continue;
+        const moved = order.slice(); const [bi] = moved.splice(x, 1); moved.splice(y, 0, bi);
+        const c = cost(posOf(moved));
+        if (c < best - 1e-9) { best = c; order = moved; improved = true; }
+      }
+    }
+    return {...S, bands: order.map(bi => bands[bi]), stack: 'cross', crossingCost: best};
   }
 
   // Glyph bigrams of a spelling from its saved unit string ('ch o l'), with the word edges ^ and $: ^ch, cho, ol, l$.
@@ -192,7 +374,7 @@
     const pairs = bigramUnits(list, units);
     const bands = kept.map(b => ({word: null, label: b, kind: 'bigram', pair: pairs.get(b) || null, words: [b], values: values([b]), mass: mass.get(b)}));
     const other = rest.length ? {word: null, label: OTHER_LABEL.bigram, kind: 'bigram', pooled: true, classes: rest.length, words: rest, values: values(rest), mass: rest.reduce((v, b) => v + mass.get(b), 0)} : null;
-    return {axis: cols.axis, mergeQ: cols.mergeQ, order: cols.order, by: 'bigram', columns: columnsMeta(K), bands, other, totals, sparse: wordTokens.map(n => n < SPARSE), words: sorted, cap};
+    return {axis: cols.axis, mergeQ: cols.mergeQ, order: cols.order, by: 'bigram', columns: columnsMeta(K), ...shapeOf(cols), bands, other, totals, sparse: wordTokens.map(n => n < SPARSE), words: sorted, cap};
   }
 
   // The spelling ledger of each step read as a bigram ledger: a bigram's mass on either side is the sum of its
@@ -234,7 +416,7 @@
       const routes = convert(step.routes, get);
       const totals = {source: 0, target: 0, kept: 0, routed: 0, unplaced: 0, unfilled: 0, dormant_out: 0, dormant_in: 0, passed_out: 0, passed_in: 0};
       for (const e of per.values()) { totals.source += e.a; totals.target += e.b; totals.kept += e.kept; totals.routed += e.sent; totals.unplaced += e.unplaced; totals.unfilled += e.unfilled; totals.dormant_out += e.dormant_out; totals.dormant_in += e.dormant_in; totals.passed_out += e.passed_out; totals.passed_in += e.passed_in; }
-      return {step: step.step, key: step.key, from: step.from, to: step.to, routes, perWord: per, totals, bigram: true};
+      return {step: step.step, i: step.i, j: step.j, key: step.key, from: step.from, to: step.to, routes, perWord: per, totals, bigram: true, traced: step.traced};
     });
     const skips = new Map();
     for (const sk of (L && L.skips) || []) for (const [b, k] of nOf(sk.word)) { const key = b + '|' + sk.from + '|' + sk.to; const e = skips.get(key) || {word: b, from: sk.from, to: sk.to, parked: 0}; e.parked += sk.parked * k; skips.set(key, e); }
@@ -249,9 +431,9 @@
   function ruleSeries(L, {cap = 12} = {}) {
     const keyOf = rt => (rt.rules && rt.rules.length ? [...rt.rules].sort(order).join(', ') : 'a rule');
     const totals = new Map(), add = (by, rt) => { const k = keyOf(rt); by.set(k, (by.get(k) || 0) + rt.mass); totals.set(k, (totals.get(k) || 0) + rt.mass); };
-    const steps = (L || []).map(step => { const by = new Map(); for (const rt of step.routes) add(by, rt); return {step: step.step, key: step.key, from: step.from, to: step.to, by, totals: step.totals}; });
+    const steps = (L || []).map(step => { const by = new Map(); for (const rt of step.routes) add(by, rt); return {step: step.step, i: step.i, j: step.j, key: step.key, from: step.from, to: step.to, by, totals: step.totals}; });
     let pass = null;
-    if (L && L.pass) { const by = new Map(); for (const rt of L.pass.routes) add(by, rt); pass = {step: L.pass.step, step2: L.pass.step2, key: L.pass.key, from: L.pass.from, to: L.pass.to, by, total: L.pass.total}; }
+    if (L && L.pass) { const by = new Map(); for (const rt of L.pass.routes) add(by, rt); pass = {step: L.pass.step, step2: L.pass.step2, i: L.pass.i, mid: L.pass.mid, j: L.pass.j, key: L.pass.key, from: L.pass.from, to: L.pass.to, by, total: L.pass.total}; }
     const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1] || order(a[0], b[0]));
     const kept = ranked.slice(0, cap).map(e => e[0]), rest = new Set(ranked.slice(cap).map(e => e[0]));
     const fold = by => { const m = new Map(); for (const [k, v] of by) { const kk = rest.has(k) ? 'other rules' : k; m.set(kk, (m.get(kk) || 0) + v); } return m; };
@@ -266,18 +448,22 @@
   // column a ≤ i is min(rate_a … rate_{i+1}) − min(rate_{a−1} … rate_{i+1}), summed over the spellings (per 10k); the parts
   // sum to the step's kept mass Σ min(rate_i, rate_{i+1}), and the part since column 0 is the mass present in every column
   // so far. A spelling absent in a column starts a new run after it.
+  // Each step's parts are indexed by the origin column; along a path (under the fork, the path the step lies on) only
+  // the columns before the step's source can be origins, the rest stay zero.
   function keptSince(cols, words) {
     const K = cols.columns, n = K.length, rate = (w, c) => (c.N ? (c.counts.get(w) || 0) / c.N * PER : 0);
-    const steps = K.slice(1).map((c, i) => new Array(i + 1).fill(0));
+    const steps = stepsOf(cols), paths = pathsOf(cols);
+    const prefixOf = (i, j) => { for (const p of paths) { const k = p.indexOf(j); if (k > 0 && p[k - 1] === i) return p.slice(0, k + 1); } return [i, j]; };
+    const prefixes = steps.map(([i, j]) => prefixOf(i, j)), out = steps.map(([i]) => new Array(i + 1).fill(0));
     for (const w of words) {
       const r = K.map(c => rate(w, c));
-      for (let i = 0; i + 1 < n; i++) {
-        const since = []; let cur = r[i + 1];
-        for (let a = i; a >= 0; a--) { cur = Math.min(cur, r[a]); since[a] = cur; }
-        for (let a = 0; a <= i; a++) steps[i][a] += since[a] - (a > 0 ? since[a - 1] : 0);
-      }
+      steps.forEach((ij, s) => {
+        const p = prefixes[s], since = new Array(p.length).fill(0); let cur = r[p[p.length - 1]];
+        for (let a = p.length - 2; a >= 0; a--) { cur = Math.min(cur, r[p[a]]); since[a] = cur; }
+        for (let a = 0; a + 1 < p.length; a++) out[s][p[a]] += since[a] - (a > 0 ? since[a - 1] : 0);
+      });
     }
-    return {steps, total: steps.map(s => s.reduce((v, x) => v + x, 0))};
+    return {steps: out, total: out.map(s => s.reduce((v, x) => v + x, 0))};
   }
 
   function exactPairs(pairs, words) {
@@ -312,21 +498,41 @@
   }
 
   // Skipped groups: a spelling with tokens in column i, none in the columns between, and tokens again in column j
-  // parks min(rate_i, rate_j) across the gap: that mass leaves the loss of step i and the gain of step j − 1.
-  function skipsOf(K, list, rate) {
-    const out = [], dormOut = K.map(() => new Map()), dormIn = K.map(() => new Map());
+  // parks min(rate_i, rate_j) across the gap: that mass leaves the loss of the step out of i and the gain of the step
+  // into j. Along one path the columns are read in order; with several paths (the fork: the trunk followed by each
+  // arm) each path is read on its own, a gap on the trunk is listed once, and a column parks the larger of what the
+  // paths through it park: a spelling absent from a trunk group is carried across it when it returns on either arm.
+  // The parked masses are kept per path; `forStep(i, j)` gives the step's own: the larger over the paths that run i → j
+  // (a trunk step lies on every path, an arm step on its own), so a skip on one arm never parks the other arm's step.
+  // `dormOut` and `dormIn` are the per-column maximum over the paths, for callers that read one line.
+  function skipsOf(K, list, rate, paths = null) {
+    const routes = paths && paths.length ? paths : [K.map((c, i) => i)], out = [], seen = new Map();
+    const perPath = routes.map(() => ({dormOut: K.map(() => new Map()), dormIn: K.map(() => new Map())}));
     for (const w of list) {
       const r = K.map(c => rate(w, c));
-      let i = 0;
-      while (i < r.length) {
-        if (!(r[i] > 0)) { i++; continue; }
-        let j = i + 1;
-        while (j < r.length && !(r[j] > 0)) j++;
-        if (j < r.length && j > i + 1) { const parked = Math.min(r[i], r[j]); out.push({word: w, from: i, to: j, parked}); dormOut[i].set(w, parked); dormIn[j].set(w, parked); }
-        i = j;
-      }
+      routes.forEach((path, p) => {
+        let a = 0;
+        while (a < path.length) {
+          if (!(r[path[a]] > 0)) { a++; continue; }
+          let b = a + 1;
+          while (b < path.length && !(r[path[b]] > 0)) b++;
+          if (b < path.length && b > a + 1) {
+            const i = path[a], j = path[b], parked = Math.min(r[i], r[j]), key = w + '|' + i + '>' + j;
+            if (!seen.has(key)) { const sk = {word: w, from: i, to: j, parked, paths: [p]}; seen.set(key, sk); out.push(sk); } else seen.get(key).paths.push(p);
+            perPath[p].dormOut[i].set(w, parked); perPath[p].dormIn[j].set(w, parked);
+          }
+          a = b;
+        }
+      });
     }
-    return {skips: out, dormOut, dormIn};
+    const maxOf = maps => { const m = new Map(); for (const src of maps) for (const [w, v] of src) if (v > (m.get(w) || 0)) m.set(w, v); return m; };
+    const dormOut = K.map((c, i) => maxOf(perPath.map(pp => pp.dormOut[i]))), dormIn = K.map((c, j) => maxOf(perPath.map(pp => pp.dormIn[j])));
+    const forStep = (i, j) => {
+      const on = routes.map((path, p) => p).filter(p => { const a = routes[p].indexOf(i); return a >= 0 && routes[p][a + 1] === j; });
+      const ps = on.length ? on : routes.map((path, p) => p);
+      return {dout: maxOf(ps.map(p => perPath[p].dormOut[i])), din: maxOf(ps.map(p => perPath[p].dormIn[j]))};
+    };
+    return {skips: out, dormOut, dormIn, forStep};
   }
 
   // One ledger per step between neighbouring columns, in rates per 10k: for every member a (before), b (after),
@@ -367,11 +573,18 @@
     }
     return conflict ? 0 : best;
   }
+  // Each ledger carries its step's column indices i (source) and j (target) and its ordinal `step` in the list; on one
+  // line j = i + 1, under the fork the two arm steps out of the fork column share their source.
   function ledgers(cols, words, pairs, {schedule = null, dormancy = true, ...trace} = {}) {
     const K = cols.columns, list = [...words], set = new Set(list);
     // with a middle column, the direct chain (without it) is the model; the middle is read part-way along its 2a → 3a step
     const mIdx = K.findIndex(c => c.key === MIDDLE_KEY);
-    if (mIdx > 0 && mIdx + 1 < K.length) return middleLedgers(cols, words, ledgers({...cols, columns: K.filter(c => c.key !== MIDDLE_KEY)}, words, pairs, {schedule, dormancy}), {noNewD: !!(schedule && schedule.no_new_d), ...trace});
+    if (mIdx > 0 && mIdx + 1 < K.length) {
+      // the direct step around the middle column takes the schedule's own cells, or, when hidden columns leave it
+      // without any, the cells read across the gap
+      const inner = dropMiddle(cols);
+      return middleLedgers(cols, words, ledgers(inner, words, pairs, {schedule: spanSchedule(schedule, inner.spans), dormancy}), {noNewD: !!(schedule && schedule.no_new_d), ...trace});
+    }
     const rate = (w, c) => (c.N ? (c.counts.get(w) || 0) / c.N * PER : 0);
     // one entry per ordered pair: several entries for the same pair (from different rules) merge their labels, so the
     // degree read for the pair is the largest across all of them; a pair is two-way when any entry is
@@ -383,7 +596,8 @@
     }
     const own = [...merged.values()];
     const closed = schedule && schedule.no_new_d && Array.isArray(schedule.no_new_d.steps) ? new Set(schedule.no_new_d.steps) : null;
-    const {skips, dormOut, dormIn} = dormancy ? skipsOf(K, list, rate) : {skips: [], dormOut: K.map(() => new Map()), dormIn: K.map(() => new Map())};
+    const parking = dormancy ? skipsOf(K, list, rate, pathsOf(cols)) : {skips: [], forStep: () => ({dout: new Map(), din: new Map()})};
+    const skips = parking.skips;
     const edgesFor = key => {
       const edges = [];
       for (const [a, b, fwd, rules] of own) {
@@ -406,16 +620,17 @@
       }
       return totals;
     };
-    const result = K.slice(1).map((to, i) => {
-      const from = K[i], key = from.key + '>' + to.key, loss = new Map(), gain = new Map(), perWord = new Map();
+    const result = stepsOf(cols).map(([i, j], s) => {
+      const from = K[i], to = K[j], key = from.key + '>' + to.key, loss = new Map(), gain = new Map(), perWord = new Map();
+      const park = parking.forStep(i, j);
       for (const w of list) {
-        const a = rate(w, from), b = rate(w, to), kept = Math.min(a, b), dout = dormOut[i].get(w) || 0, din = dormIn[i + 1].get(w) || 0;
+        const a = rate(w, from), b = rate(w, to), kept = Math.min(a, b), dout = park.dout.get(w) || 0, din = park.din.get(w) || 0;
         loss.set(w, Math.max(a - b - dout, 0)); gain.set(w, Math.max(b - a - din, 0));
         perWord.set(w, {word: w, a, b, kept, sent: 0, received: 0, unplaced: 0, unfilled: 0, dormant_out: dout, dormant_in: din, passed_out: 0, passed_in: 0});
       }
       const flow = capFlow(loss, gain, edgesFor(key)), routes = flow.routes;
       for (const r of routes) { perWord.get(r.from).sent += r.mass; perWord.get(r.to).received += r.mass; }
-      return {step: i, key, from: from.key, to: to.key, routes, perWord, totals: totalsOf(perWord, flow.total)};
+      return {step: s, i, j, key, from: from.key, to: to.key, routes, perWord, totals: totalsOf(perWord, flow.total)};
     });
     result.skips = skips;
     return result;
@@ -566,7 +781,8 @@
   function middleLedgers(cols, words, base, opts = {}) {
     const K = cols.columns, m = K.findIndex(c => c.key === MIDDLE_KEY), list = [...words];
     if (m <= 0 || m + 1 >= K.length) return base;
-    const direct = base[m - 1], mid = K[m], T = traceMiddle(direct, mid, list, opts);
+    // the direct step: from the column before the middle to the one after it (indices without the middle column)
+    const direct = base.find(s => s.i === m - 1 && s.j === m) || base[m - 1], mid = K[m], T = traceMiddle(direct, mid, list, opts);
     const blank = w => ({word: w, a: 0, b: 0, kept: 0, sent: 0, received: 0, unplaced: 0, unfilled: 0, dormant_out: 0, dormant_in: 0, passed_out: 0, passed_in: 0});
     const P1 = new Map(list.map(w => [w, blank(w)])), P2 = new Map(list.map(w => [w, blank(w)]));
     const r1 = [], r2 = [], pass = [];
@@ -599,12 +815,14 @@
       for (const p of per.values()) { t.source += p.a; t.target += p.b; t.kept += p.kept; t.unplaced += p.unplaced; t.unfilled += p.unfilled; t.dormant_out += p.dormant_out; t.dormant_in += p.dormant_in; t.passed_out += p.passed_out; t.passed_in += p.passed_in; }
       return t;
     };
-    const step1 = {step: m - 1, key: K[m - 1].key + '>' + mid.key, from: K[m - 1].key, to: mid.key, routes: r1, perWord: P1, totals: totals(P1, r1), traced: true};
-    const step2 = {step: m, key: mid.key + '>' + K[m + 1].key, from: mid.key, to: K[m + 1].key, routes: r2, perWord: P2, totals: totals(P2, r2), traced: true};
-    const out = base.slice(0, m - 1).concat([step1, step2], base.slice(m).map(s => ({...s, step: s.step + 1})));
+    const step1 = {step: m - 1, i: m - 1, j: m, key: K[m - 1].key + '>' + mid.key, from: K[m - 1].key, to: mid.key, routes: r1, perWord: P1, totals: totals(P1, r1), traced: true};
+    const step2 = {step: m, i: m, j: m + 1, key: mid.key + '>' + K[m + 1].key, from: mid.key, to: K[m + 1].key, routes: r2, perWord: P2, totals: totals(P2, r2), traced: true};
+    // the other steps keep their place, their column indices moved around the inserted column
+    const shift = i => (i >= m ? i + 1 : i), pos = base.indexOf(direct), remap = s => ({...s, i: shift(s.i), j: shift(s.j)});
+    const out = base.slice(0, pos).map(remap).concat([step1, step2], base.slice(pos + 1).map(remap)).map((s, k) => ({...s, step: k}));
     // the skips re-indexed around the inserted column; a skip out of 2a or into 3a splits at the middle by the word's
     // shares, and kept mass the middle text does not show parks across it
-    const shift = i => (i >= m ? i + 1 : i), skips = [];
+    const skips = [];
     const push = (word, from, to, parked) => { if (parked > 1e-9) skips.push({word, from, to, parked}); };
     for (const sk of base.skips || []) {
       const t = T.perWord.get(sk.word);
@@ -614,7 +832,7 @@
     }
     for (const t of T.perWord.values()) push(t.word, m - 1, m + 1, t.parked);
     out.skips = skips;
-    out.pass = {step: m - 1, step2: m, key: direct.key, from: K[m - 1].key, to: K[m + 1].key, routes: pass, total: pass.reduce((v, r) => v + r.mass, 0)};
+    out.pass = {step: pos, step2: pos + 1, i: m - 1, mid: m, j: m + 1, key: direct.key, from: K[m - 1].key, to: K[m + 1].key, routes: pass, total: pass.reduce((v, r) => v + r.mass, 0)};
     out.direct = direct; out.trace = T;
     return out;
   }
@@ -631,20 +849,35 @@
   // each band's kept mass continues as a ribbon, each routed mass runs as a flow from the source band to the target
   // band, and the unexplained parts end or begin as stubs. Widths follow the ledger, so a band's slots add up to its
   // segment on both sides.
-  function layout(S, L, {width = 960, height = 320, measure = 'per10k', padLeft = 20, padRight = 120, padTop = 6} = {}) {
-    const bands = S.other ? [...S.bands, S.other] : S.bands, K = S.columns, n = K.length;
+  // Under the fork the columns carry a slot (x) and a row: the trunk and the first arm in row 0, the second arm in row 1
+  // under the first, and the fork column is drawn again at the head of row 1 (a mirror of the same segments) so that
+  // each row reads as one chain and the second arm's first step leaves from the mirror. Steps are read from their
+  // column indices (i → j); a ledger without them is one line (j = i + 1).
+  // `fill` stretches every column's stack to the full plot height (its own scale, as 'share' does) while the values
+  // stay what `measure` says, so the bands can be read in every column with per-10k numbers beside them.
+  function layout(S, L, {width = 960, height = 320, measure = 'per10k', padLeft = 20, padRight = 120, padTop = 6, rowGap = 84, fill = false} = {}) {
+    const bands = [...S.bands, ...(S.other ? [S.other] : []), ...(S.removed ? [S.removed] : [])], K = S.columns, n = K.length;
     const nw = isGroups(S.axis) ? 14 : 7, span = Math.max(1, width - padLeft - padRight - nw);
     const atPositions = (S.axis === 'poolsPos' || S.axis === 'groupsPos') && K.every(c => c.position != null);
+    const slotOf = K.map((c, i) => (c.slot != null ? c.slot : i)), rowOf = K.map(c => c.row || 0);
+    const rows = n ? Math.max(...rowOf) + 1 : 1, nSlots = n ? Math.max(...slotOf) + 1 : 1, rowY = row => row * (height + rowGap);
+    const fork = S.fork && S.fork.at != null && K[S.fork.at] ? S.fork : null, forkAt = fork ? fork.at : -1;
+    const mirrorRows = fork ? [...new Set(fork.arms.map(a => a.row).filter(row => row > 0))] : [];
     // the groups' medians are stretched so that the first group sits at the left edge and the last at the right,
     // keeping their relative distances; the bifolia keep the path's own 0 to 1
     const lo = S.axis === 'groupsPos' && atPositions ? Math.min(...K.map(c => c.position)) : 0, hi = S.axis === 'groupsPos' && atPositions ? Math.max(...K.map(c => c.position)) : 1;
     const place = pos => (hi > lo ? (pos - lo) / (hi - lo) : 0.5) * span;
-    const xs = K.map((c, i) => padLeft + (atPositions ? place(c.position) : n > 1 ? i * span / (n - 1) : span / 2));
+    const xs = K.map((c, i) => padLeft + (atPositions ? place(c.position) : nSlots > 1 ? slotOf[i] * span / (nSlots - 1) : span / 2));
     if (S.axis === 'groupsPos' && atPositions) {
-      // keep the group columns at least MIN_GROUP_GAP apart (a forward pass, then back inside the plot)
-      for (let i = 1; i < n; i++) xs[i] = Math.max(xs[i], xs[i - 1] + MIN_GROUP_GAP);
-      const over = xs[n - 1] - (padLeft + span);
-      if (over > 0) { for (let i = 0; i < n; i++) xs[i] -= over; for (let i = n - 2; i >= 0; i--) xs[i] = Math.min(xs[i], xs[i + 1] - MIN_GROUP_GAP); if (xs[0] < padLeft) { const d = padLeft - xs[0]; for (let i = 0; i < n; i++) xs[i] += d; } }
+      // keep the group columns of each row at least MIN_GROUP_GAP apart (a forward pass, then back inside the plot); a
+      // lower row starts at the fork column, whose x the first row has fixed
+      for (let row = 0; row < rows; row++) {
+        const own = K.map((c, i) => i).filter(i => rowOf[i] === row).sort((a, b) => slotOf[a] - slotOf[b]);
+        const fixed = row > 0 && forkAt >= 0 ? 1 : 0, seq = fixed ? [forkAt, ...own] : own;
+        for (let k = 1; k < seq.length; k++) xs[seq[k]] = Math.max(xs[seq[k]], xs[seq[k - 1]] + MIN_GROUP_GAP);
+        const over = seq.length ? xs[seq[seq.length - 1]] - (padLeft + span) : 0;
+        if (over > 0) { for (let k = fixed; k < seq.length; k++) xs[seq[k]] -= over; for (let k = seq.length - 2; k >= fixed; k--) xs[seq[k]] = Math.min(xs[seq[k]], xs[seq[k + 1]] - MIN_GROUP_GAP); if (xs[seq[fixed]] < padLeft) { const d = padLeft - xs[seq[fixed]]; for (let k = fixed; k < seq.length; k++) xs[seq[k]] += d; } }
+      }
     }
     const value = (b, i) => (measure === 'share' ? b.values[i].share : b.values[i].rate);
     const count = i => bands.filter(b => value(b, i) > 0).length;
@@ -652,18 +885,22 @@
     const midIdx = K.findIndex(c => c.key === MIDDLE_KEY), passTotal = L && L.pass ? L.pass.total : 0;
     const total = i => bands.reduce((v, b) => v + value(b, i), 0) + (i === midIdx && passTotal ? (measure === 'share' ? (S.totals[i].rate ? passTotal / S.totals[i].rate : 0) : passTotal) : 0);
     let scales;
-    if (measure === 'share') scales = K.map((c, i) => (total(i) > 0 ? (height - GAP * (count(i) - 1)) / total(i) : 0));
+    if (measure === 'share' || fill) scales = K.map((c, i) => (total(i) > 0 ? (height - GAP * (count(i) - 1)) / total(i) : 0));
     else { let s = Infinity; K.forEach((c, i) => { if (total(i) > 0) s = Math.min(s, (height - GAP * (count(i) - 1)) / total(i)); }); scales = K.map(() => (Number.isFinite(s) ? s : 0)); }
-    const out = bands.map((b, index) => ({index, label: b.label, word: b.word, words: b.words, kind: b.kind || 'spelling', pooled: !!b.pooled, pair: b.pair || null, segments: K.map(() => null)}));
+    const out = bands.map((b, index) => ({index, label: b.label, word: b.word, words: b.words, kind: b.kind || 'spelling', pooled: !!b.pooled, removed: !!b.removed, pair: b.pair || null, segments: K.map(() => null), mirrors: {}}));
     K.forEach((c, i) => {
-      let y = padTop;
+      let y = padTop + rowY(rowOf[i]);
       bands.forEach((b, bi) => {
         const v = value(b, i); if (!(v > 0)) return;
         const h = v * scales[i];
-        out[bi].segments[i] = {x: xs[i], y, h, w: nw, n: b.values[i].n, rate: b.values[i].rate, share: b.values[i].share};
+        out[bi].segments[i] = {x: xs[i], y, h, w: nw, n: b.values[i].n, rate: b.values[i].rate, share: b.values[i].share, row: rowOf[i]};
         y += h + GAP;
       });
     });
+    // the fork column's mirror in each lower row: the same segments, moved down to that row
+    for (const row of mirrorRows) for (const b of out) if (b.segments[forkAt]) b.mirrors[row] = {...b.segments[forkAt], y: b.segments[forkAt].y + rowY(row) - rowY(rowOf[forkAt]), row, mirror: true};
+    // the source cell of a step into column j: the mirror of the fork column when j lies in another row, else the column itself
+    const cellOf = (bi, i, j) => (rowOf[j] !== rowOf[i] ? out[bi].mirrors[rowOf[j]] || null : out[bi].segments[i]);
     // slots per step and band: [kept][flows out / in][stub], widths from the ledger in rate units × the side's scale
     const bandOf = new Map(); bands.forEach((b, bi) => b.words.forEach(w => bandOf.set(w, bi)));
     const unit = (i, v) => (measure === 'share' ? (S.totals[i].rate ? v / S.totals[i].rate : 0) : v) * scales[i];
@@ -671,7 +908,7 @@
     // the skipped groups' slots: per band, parked mass leaving at column i towards column j, and arriving at j from i
     const skipOut = bands.map(() => new Map()), skipIn = bands.map(() => new Map());
     for (const sk of (L && L.skips) || []) {
-      const bi = bandOf.get(sk.word); if (bi == null) continue;
+      const bi = bandOf.get(sk.word); if (bi == null || bands[bi].removed) continue;      // the removed words' own parking is not drawn
       const ko = sk.from + '>' + sk.to;
       skipOut[bi].set(ko, (skipOut[bi].get(ko) || 0) + sk.parked); skipIn[bi].set(ko, (skipIn[bi].get(ko) || 0) + sk.parked);
     }
@@ -682,68 +919,91 @@
       const byKey = new Map();
       for (const rt of L.pass.routes) {
         const f = bandOf.get(rt.from), tt = bandOf.get(rt.to); if (f == null || tt == null || f === tt) continue;
+        if (bands[f].removed && bands[tt].removed) continue;
         const k = f + '>' + tt;
-        if (!byKey.has(k)) { const x = {step: L.pass.step, step2: L.pass.step2, from: f, to: tt, mass: 0, routes: []}; byKey.set(k, x); passAgg.push(x); }
+        if (!byKey.has(k)) { const x = {step: L.pass.step, step2: L.pass.step2, i: L.pass.i != null ? L.pass.i : L.pass.step, j: L.pass.j != null ? L.pass.j : L.pass.step2 + 1, from: f, to: tt, mass: 0, routes: []}; byKey.set(k, x); passAgg.push(x); }
         const x = byKey.get(k); x.mass += rt.mass; x.routes.push(rt);
       }
       passAgg.sort((p, q) => p.from - q.from || p.to - q.to);
     }
-    (L || []).forEach(step => {
-      const i = step.step, j = i + 1;
+    const stepList = (L || []).map(step => ({step: step.step, i: step.i != null ? step.i : step.step, j: step.j != null ? step.j : (step.i != null ? step.i : step.step) + 1, key: step.key}));
+    (L || []).forEach((step, si) => {
+      const {i, j} = stepList[si], ord = step.step;
       // a route's mass at its target (massTo) differs from its source mass only for bigram flows, which taper
       const massTo = rt => (rt.massTo != null ? rt.massTo : rt.mass);
       const agg = bands.map(() => ({kept: 0, keptTo: 0, sent: 0, received: 0, unplaced: 0, unfilled: 0, out: new Map(), in: new Map()}));
-      for (const p of step.perWord.values()) { const a = agg[bandOf.get(p.word)]; if (!a) continue; a.kept += p.kept; a.keptTo += p.kept; a.unplaced += p.unplaced; a.unfilled += p.unfilled; }
+      // the removed words' own kept and unexplained mass, and routes among them, stay out of the chart
+      for (const p of step.perWord.values()) { const bi = bandOf.get(p.word), a = agg[bi]; if (!a || bands[bi].removed) continue; a.kept += p.kept; a.keptTo += p.kept; a.unplaced += p.unplaced; a.unfilled += p.unfilled; }
       for (const rt of step.routes) {
         const f = bandOf.get(rt.from), t = bandOf.get(rt.to); if (f == null || t == null) continue;
+        if (bands[f].removed && bands[t].removed) continue;
         if (f === t) { agg[f].kept += rt.mass; agg[f].keptTo += massTo(rt); continue; }      // a route inside the band reads as kept
         const key = f + '>' + t;
         if (!agg[f].out.has(key)) { const x = {from: f, to: t, mass: 0, massTo: 0, routes: []}; agg[f].out.set(key, x); agg[t].in.set(key, x); }
         const x = agg[f].out.get(key); x.mass += rt.mass; x.massTo += massTo(rt); x.routes.push(rt);
       }
-      const offL = bands.map((b, bi) => out[bi].segments[i] ? out[bi].segments[i].y : 0), offR = bands.map((b, bi) => out[bi].segments[j] ? out[bi].segments[j].y : 0);
+      const src = bands.map((b, bi) => cellOf(bi, i, j));
       const x1 = xs[i] + nw, x2 = xs[j], stubLen = Math.min(30, (x2 - x1) * 0.28);
+      // The slots of each face are ordered by where their other end lies: flows to or from the bands above first, then
+      // the band's own kept ribbon and its parked bands (whose other end is the band itself), then flows to or from the
+      // bands below, and the unmatched wedge last. Bands keep one vertical order in every column, so a face ordered by
+      // the partner band's index sends every ribbon off in the direction it has to go, and ribbons of one band do not
+      // cross one another; two flows that run opposite ways between the same two bands still must.
+      const right = bands.map(() => []), left = bands.map(() => []), RANK = {kept: 0, parked: 1, flow: 2, pass: 3, stub: 9};
       bands.forEach((b, bi) => {
         const a = agg[bi];
-        if (a.kept > 1e-9 && out[bi].segments[i] && out[bi].segments[j]) {
-          const w1 = unit(i, a.kept), w2 = unit(j, a.keptTo);
-          ribbons.push({band: bi, step: i, kept: a.kept, keptTo: a.keptTo, path: ribbon(x1, offL[bi], w1, x2, offR[bi], w2)});
-          offL[bi] += w1; offR[bi] += w2;
-        }
+        if (a.kept > 1e-9 && src[bi] && out[bi].segments[j]) { const it = {kind: 'kept', kept: a.kept, keptTo: a.keptTo, w1: unit(i, a.kept), w2: unit(j, a.keptTo)}; right[bi].push({it, partner: bi, rank: RANK.kept}); left[bi].push({it, partner: bi, rank: RANK.kept}); }
       });
-      // flows in band order of their source, then target, so slots stay in reading order on both sides; each flow keeps
-      // its end points (the middle of its slot on each side) for labels
       const all = [...new Set(agg.flatMap(a => [...a.out.values()]))].sort((p, q) => p.from - q.from || p.to - q.to);
-      for (const f of all) {
-        const w1 = unit(i, f.mass), w2 = unit(j, f.massTo);
-        flows.push({step: i, from: f.from, to: f.to, mass: f.mass, massTo: f.massTo, routes: f.routes, w1, w2, x1, y1: offL[f.from] + w1 / 2, x2, y2: offR[f.to] + w2 / 2, path: ribbon(x1, offL[f.from], w1, x2, offR[f.to], w2)});
-        offL[f.from] += w1; offR[f.to] += w2;
-      }
-      // the parked mass: slots leaving column i (ordered by destination) and arriving at column j (ordered by origin)
+      for (const f of all) { const it = {kind: 'flow', f, w1: unit(i, f.mass), w2: unit(j, f.massTo)}; right[f.from].push({it, partner: f.to, rank: RANK.flow}); left[f.to].push({it, partner: f.from, rank: RANK.flow}); }
+      // the parked mass: slots leaving column i (at the fork column only those bound for this step's row) and arriving at column j
       bands.forEach((b, bi) => {
-        const leaving = [...skipOut[bi].entries()].filter(([k]) => Number(k.split('>')[0]) === i).sort((p, q) => Number(p[0].split('>')[1]) - Number(q[0].split('>')[1]));
-        for (const [k, parked] of leaving) { if (!out[bi].segments[i]) continue; const w = unit(i, parked); const e = skipY.get(bi + '|' + k) || {}; e.y1 = offL[bi]; e.w1 = w; skipY.set(bi + '|' + k, e); offL[bi] += w; }
+        const leaving = [...skipOut[bi].entries()].filter(([k]) => Number(k.split('>')[0]) === i && (i !== forkAt || rowOf[Number(k.split('>')[1])] === rowOf[j])).sort((p, q) => Number(p[0].split('>')[1]) - Number(q[0].split('>')[1]));
+        for (const [k, parked] of leaving) if (src[bi]) right[bi].push({it: {kind: 'parked', key: bi + '|' + k, w1: unit(i, parked)}, partner: bi, rank: RANK.parked});
         const arriving = [...skipIn[bi].entries()].filter(([k]) => Number(k.split('>')[1]) === j).sort((p, q) => Number(p[0].split('>')[0]) - Number(q[0].split('>')[0]));
-        for (const [k, parked] of arriving) { if (!out[bi].segments[j]) continue; const w = unit(j, parked); const e = skipY.get(bi + '|' + k) || {}; e.y2 = offR[bi]; e.w2 = w; skipY.set(bi + '|' + k, e); offR[bi] += w; }
+        for (const [k, parked] of arriving) if (out[bi].segments[j]) left[bi].push({it: {kind: 'parked', key: bi + '|' + k, w2: unit(j, parked)}, partner: bi, rank: RANK.parked});
       });
       if (L && L.pass) {
-        if (i === L.pass.step) for (const f of passAgg) { if (!out[f.from].segments[i]) continue; f.w1 = unit(i, f.mass); f.yt1 = offL[f.from]; f.x1 = x1; offL[f.from] += f.w1; }
-        if (i === L.pass.step2) for (const f of passAgg) { if (!out[f.to].segments[j]) continue; f.w2 = unit(j, f.mass); f.yt2 = offR[f.to]; f.x2 = x2; offR[f.to] += f.w2; }
+        if (ord === L.pass.step) for (const f of passAgg) if (src[f.from]) { f.w1 = unit(i, f.mass); f.x1 = x1; right[f.from].push({it: {kind: 'pass', f, w1: f.w1}, partner: f.to, rank: RANK.pass}); }
+        if (ord === L.pass.step2) for (const f of passAgg) if (out[f.to].segments[j]) { f.w2 = unit(j, f.mass); f.x2 = x2; left[f.to].push({it: {kind: 'pass', f, w2: f.w2}, partner: f.from, rank: RANK.pass}); }
       }
       bands.forEach((b, bi) => {
         const a = agg[bi];
-        if (a.unplaced > 1e-9 && out[bi].segments[i]) { const w = unit(i, a.unplaced), y = offL[bi]; stubs.push({step: i, band: bi, kind: 'unplaced', mass: a.unplaced, path: `M${r(x1)} ${r(y)} L${r(x1 + stubLen)} ${r(y + w / 2)} L${r(x1)} ${r(y + w)}Z`}); offL[bi] += w; }
-        if (a.unfilled > 1e-9 && out[bi].segments[j]) { const w = unit(j, a.unfilled), y = offR[bi]; stubs.push({step: i, band: bi, kind: 'unfilled', mass: a.unfilled, path: `M${r(x2)} ${r(y)} L${r(x2 - stubLen)} ${r(y + w / 2)} L${r(x2)} ${r(y + w)}Z`}); offR[bi] += w; }
+        if (a.unplaced > 1e-9 && src[bi]) right[bi].push({it: {kind: 'stub', mass: a.unplaced, w1: unit(i, a.unplaced)}, partner: Infinity, rank: RANK.stub});
+        if (a.unfilled > 1e-9 && out[bi].segments[j]) left[bi].push({it: {kind: 'stub', mass: a.unfilled, w2: unit(j, a.unfilled)}, partner: Infinity, rank: RANK.stub});
+      });
+      // the slots take their places down each face in that order; a flow's one item is on both faces, so it gets both ends
+      const order = (p, q) => (p.partner === q.partner ? p.rank - q.rank : p.partner < q.partner ? -1 : 1);
+      bands.forEach((b, bi) => {
+        let y = src[bi] ? src[bi].y : 0;
+        for (const e of right[bi].sort(order)) { e.it.y1 = y; y += e.it.w1; }
+        y = out[bi].segments[j] ? out[bi].segments[j].y : 0;
+        for (const e of left[bi].sort(order)) { e.it.y2 = y; y += e.it.w2; }
+      });
+      // then every ribbon, flow, parked slot, passthrough slot and wedge is drawn from its slots
+      bands.forEach((b, bi) => {
+        for (const {it} of right[bi]) {
+          if (it.kind === 'kept') ribbons.push({band: bi, step: ord, i, j, kept: it.kept, keptTo: it.keptTo, path: ribbon(x1, it.y1, it.w1, x2, it.y2, it.w2)});
+          else if (it.kind === 'flow') { const f = it.f; flows.push({step: ord, i, j, from: f.from, to: f.to, mass: f.mass, massTo: f.massTo, routes: f.routes, w1: it.w1, w2: it.w2, x1, y1: it.y1 + it.w1 / 2, x2, y2: it.y2 + it.w2 / 2, path: ribbon(x1, it.y1, it.w1, x2, it.y2, it.w2)}); }
+          else if (it.kind === 'parked') { const s = skipY.get(it.key) || {}; s.y1 = it.y1; s.w1 = it.w1; skipY.set(it.key, s); }
+          else if (it.kind === 'pass') it.f.yt1 = it.y1;
+          else if (it.kind === 'stub') stubs.push({step: ord, i, j, band: bi, kind: 'unplaced', mass: it.mass, path: `M${r(x1)} ${r(it.y1)} L${r(x1 + stubLen)} ${r(it.y1 + it.w1 / 2)} L${r(x1)} ${r(it.y1 + it.w1)}Z`});
+        }
+        for (const {it} of left[bi]) {
+          if (it.kind === 'parked') { const s = skipY.get(it.key) || {}; s.y2 = it.y2; s.w2 = it.w2; skipY.set(it.key, s); }
+          else if (it.kind === 'pass') it.f.yt2 = it.y2;
+          else if (it.kind === 'stub') stubs.push({step: ord, i, j, band: bi, kind: 'unfilled', mass: it.mass, path: `M${r(x2)} ${r(it.y2)} L${r(x2 - stubLen)} ${r(it.y2 + it.w2 / 2)} L${r(x2)} ${r(it.y2 + it.w2)}Z`});
+        }
       });
     });
     // each passthrough flow runs into an estimated anchor inside the middle column (stacked under its observed segments)
     // and out of it again, so the band can be followed through the column it was not observed in
-    let anchorY = padTop;
+    let anchorY = padTop + (midIdx >= 0 ? rowY(rowOf[midIdx]) : 0);
     if (midIdx >= 0) for (const b of out) if (b.segments[midIdx]) anchorY = Math.max(anchorY, b.segments[midIdx].y + b.segments[midIdx].h + GAP);
     const pass = passAgg.filter(f => f.w1 != null && f.w2 != null).map(f => {
       const wm = unit(midIdx, f.mass), anchor = {x: xs[midIdx], y: anchorY, w: nw, h: wm};
       anchorY += wm + GAP;
-      return {step: f.step, step2: f.step2, from: f.from, to: f.to, mass: f.mass, massTo: f.mass, routes: f.routes, w1: f.w1, w2: f.w2, x1: f.x1, x2: f.x2, y1: f.yt1 + f.w1 / 2, y2: f.yt2 + f.w2 / 2, pass: true, anchor,
+      return {step: f.step, step2: f.step2, i: f.i, j: f.j, from: f.from, to: f.to, mass: f.mass, massTo: f.mass, routes: f.routes, w1: f.w1, w2: f.w2, x1: f.x1, x2: f.x2, y1: f.yt1 + f.w1 / 2, y2: f.yt2 + f.w2 / 2, pass: true, anchor,
         path: ribbon(f.x1, f.yt1, f.w1, anchor.x, anchor.y, wm) + ' ' + ribbon(anchor.x + nw, anchor.y, wm, f.x2, f.yt2, f.w2)};
     });
     // the dotted bands of the skipped groups, from the slot leaving column i to the slot arriving at column j
@@ -755,18 +1015,23 @@
         skips.push({band: bi, from: i, to: j, parked, x1, x2, path: ribbon(x1, e.y1, e.w1, x2, e.y2, e.w2)});
       }
     });
-    // labels in the right margin, one per band, anchored (x0, y0) at the right edge of the band's last segment and
-    // spread apart by at least 14 px, kept inside the plot where they fit
-    const xLabel = xs[n - 1] + nw + 8;
-    const labels = out.map(b => { let last = -1; b.segments.forEach((s, i) => { if (s) last = i; }); if (last < 0) return null; const y0 = b.segments[last].y + b.segments[last].h / 2; return {band: b.index, label: b.label, x: xLabel, y: y0, x0: xs[last] + nw, y0, column: last}; }).filter(Boolean);
-    labels.sort((a, b) => a.y0 - b.y0);
-    for (let k = 1; k < labels.length; k++) labels[k].y = Math.max(labels[k].y, labels[k - 1].y + 14);
-    const overflow = labels.length ? labels[labels.length - 1].y + 6 - (padTop + height) : 0;
-    if (overflow > 0) { for (const l of labels) l.y -= overflow; for (let k = 1; k < labels.length; k++) labels[k].y = Math.max(labels[k].y, labels[k - 1].y + 14); }
-    const cols = K.map((c, i) => ({...c, x: xs[i], w: nw, total: S.totals[i], sparse: S.sparse[i], stack: total(i) * scales[i] + GAP * Math.max(0, count(i) - 1)}));
-    return {width, height: padTop + height + 6, plotTop: padTop, plotHeight: height, measure, columns: cols, bands: out, ribbons, flows, pass, stubs, skips, labels, scales};
+    // labels in the right margin of each row, one per band and row, anchored (x0, y0) at the right edge of the band's
+    // last segment in that row and spread apart by at least 14 px, kept inside the row's plot where they fit
+    const xLabel = (n ? Math.max(...xs) : padLeft) + nw + 8, labels = [];
+    for (let row = 0; row < rows; row++) {
+      const lastSlot = Math.max(-1, ...K.map((c, i) => (rowOf[i] === row ? slotOf[i] : -1)));
+      const own = out.map(b => { let last = -1; b.segments.forEach((s, i) => { if (s && rowOf[i] === row) last = i; }); if (last < 0) return null; const y0 = b.segments[last].y + b.segments[last].h / 2; return {band: b.index, label: b.label, x: xLabel, y: y0, x0: xs[last] + nw, y0, column: last, row, last: slotOf[last] === lastSlot}; }).filter(Boolean);
+      own.sort((a, b) => a.y0 - b.y0);
+      for (let k = 1; k < own.length; k++) own[k].y = Math.max(own[k].y, own[k - 1].y + 14);
+      const overflow = own.length ? own[own.length - 1].y + 6 - (padTop + rowY(row) + height) : 0;
+      if (overflow > 0) { for (const l of own) l.y -= overflow; for (let k = 1; k < own.length; k++) own[k].y = Math.max(own[k].y, own[k - 1].y + 14); }
+      labels.push(...own);
+    }
+    const cols = K.map((c, i) => ({...c, x: xs[i], w: nw, row: rowOf[i], slot: slotOf[i], y: padTop + rowY(rowOf[i]), total: S.totals[i], sparse: S.sparse[i], stack: total(i) * scales[i] + GAP * Math.max(0, count(i) - 1)}));
+    const mirrors = mirrorRows.map(row => ({col: forkAt, key: K[forkAt].key, row, x: xs[forkAt], w: nw, y: padTop + rowY(row), stack: cols[forkAt].stack}));
+    return {width, height: padTop + rows * height + (rows - 1) * rowGap + 6, plotTop: padTop, plotHeight: height, rows, rowGap, rowY: [...Array(rows)].map((_, row) => rowY(row)), fork, mirrors, steps: stepList, measure, fill: !!fill, columns: cols, bands: out, ribbons, flows, pass, stubs, skips, labels, scales};
   }
 
-  const api = {CHAIN, ALT_CHAIN, OFF_CHAIN, TERMINAL, MIDDLE_KEY, MIDDLE_GROUPS, SPARSE, GAP, PER, core, isGroups, columns, members, series, classKey, bigrams, bigramSeries, bigramLedgers, exactPairs, ledgers, capFlow, skipsOf, partsOf, labelDegree, pairDegree, newDForm, layout, ribbonPath: ribbon, GAP, bigramUnits, ruleSeries, traceMiddle, middleLedgers, keptSince};
+  const api = {CHAIN, ALT_CHAIN, FORK, FORK_CHAIN, ORDERS, OFF_CHAIN, TERMINAL, MIDDLE_KEY, MIDDLE_GROUPS, REMOVED_LABEL, REST_LABEL, SPARSE, GAP, PER, core, isGroups, columns, stepsOf, pathsOf, dropMiddle, dropColumns, spanSchedule, removedFlows, lineageOf, ledgerFlows, members, series, stackOrder, classKey, bigrams, bigramSeries, bigramLedgers, exactPairs, ledgers, capFlow, skipsOf, partsOf, labelDegree, pairDegree, newDForm, layout, ribbonPath: ribbon, GAP, bigramUnits, ruleSeries, traceMiddle, middleLedgers, keptSince};
   if (node) module.exports = api; else root.EchoChainFlow = api;
 })(typeof window !== 'undefined' ? window : globalThis);
